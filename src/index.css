@@ -1,0 +1,147 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Figtree:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* MyFit design system — White + Dark Navy + Electric Blue. All colors HSL. */
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222 60% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 60% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 60% 12%;
+
+    /* Dark navy primary */
+    --primary: 222 70% 14%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Electric blue accent */
+    --accent: 222 89% 55%;
+    --accent-foreground: 0 0% 100%;
+
+    --secondary: 220 30% 96%;
+    --secondary-foreground: 222 60% 12%;
+
+    --muted: 220 20% 96%;
+    --muted-foreground: 222 15% 45%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 152 70% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 222 60% 12%;
+
+    --border: 220 20% 90%;
+    --input: 220 20% 90%;
+    --ring: 222 89% 55%;
+
+    --radius: 0.875rem;
+
+    /* Brand gradients & shadows */
+    --gradient-hero: linear-gradient(135deg, hsl(222 70% 14%) 0%, hsl(222 89% 35%) 100%);
+    --gradient-accent: linear-gradient(135deg, hsl(222 89% 55%), hsl(210 95% 60%));
+    --shadow-soft: 0 4px 20px -4px hsl(222 70% 14% / 0.08);
+    --shadow-card: 0 2px 12px -2px hsl(222 70% 14% / 0.06);
+    --shadow-glow: 0 10px 40px -10px hsl(222 89% 55% / 0.35);
+
+    --sidebar-background: 222 70% 14%;
+    --sidebar-foreground: 220 30% 92%;
+    --sidebar-primary: 222 89% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 50% 22%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 50% 22%;
+    --sidebar-ring: 222 89% 55%;
+  }
+
+  .dark {
+    --background: 222 60% 6%;
+    --foreground: 220 30% 96%;
+
+    --card: 222 50% 10%;
+    --card-foreground: 220 30% 96%;
+
+    --popover: 222 50% 10%;
+    --popover-foreground: 220 30% 96%;
+
+    --primary: 222 89% 60%;
+    --primary-foreground: 222 60% 6%;
+
+    --accent: 222 89% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --secondary: 222 40% 16%;
+    --secondary-foreground: 220 30% 96%;
+
+    --muted: 222 40% 14%;
+    --muted-foreground: 220 15% 65%;
+
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 40% 18%;
+    --input: 222 40% 18%;
+    --ring: 222 89% 60%;
+
+    --gradient-hero: linear-gradient(135deg, hsl(222 60% 8%) 0%, hsl(222 70% 18%) 100%);
+    --shadow-soft: 0 4px 20px -4px hsl(0 0% 0% / 0.4);
+    --shadow-card: 0 2px 12px -2px hsl(0 0% 0% / 0.3);
+
+    --sidebar-background: 222 60% 8%;
+    --sidebar-foreground: 220 30% 92%;
+    --sidebar-primary: 222 89% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 40% 16%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 222 40% 18%;
+    --sidebar-ring: 222 89% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
+  }
+}
+
+@layer utilities {
+  .gradient-hero {
+    background: var(--gradient-hero);
+  }
+  .gradient-accent {
+    background: var(--gradient-accent);
+  }
+  .shadow-soft {
+    box-shadow: var(--shadow-soft);
+  }
+  .shadow-card {
+    box-shadow: var(--shadow-card);
+  }
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+  .container-app {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+}

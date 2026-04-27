@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,9 +10,12 @@ import { Lock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const Payment = () => {
-  const navigate = useNavigate();
-  const [draft, setDraft] = useState<any>(null);
+  const navigate    = useNavigate();
+  const location    = useLocation();
+  const [draft, setDraft]           = useState<any>(null);
   const [processing, setProcessing] = useState(false);
+
+  const inDashboard = location.pathname.startsWith("/dashboard");
 
   useEffect(() => {
     const raw = sessionStorage.getItem("myfit:booking");
@@ -23,7 +26,11 @@ const Payment = () => {
     return (
       <div className="container-app py-20 text-center">
         <h1 className="font-display font-bold text-2xl">No booking found</h1>
-        <Button asChild className="mt-6"><Link to="/explore">Back to explore</Link></Button>
+        <Button asChild className="mt-6">
+          <Link to={inDashboard ? "/dashboard/find-creators" : "/explore"}>
+            {inDashboard ? "Find Creators" : "Back to explore"}
+          </Link>
+        </Button>
       </div>
     );
   }
@@ -35,7 +42,8 @@ const Payment = () => {
     setTimeout(() => {
       sessionStorage.removeItem("myfit:booking");
       toast.success(`Payment successful via ${method}!`, { description: "Your session is confirmed." });
-      navigate("/dashboard");
+      // Always land on dashboard bookings after payment
+      navigate(inDashboard ? "/dashboard/bookings" : "/dashboard");
     }, 1200);
   };
 
@@ -43,7 +51,9 @@ const Payment = () => {
     <div className="container-app py-10 max-w-5xl grid lg:grid-cols-[1fr_360px] gap-6">
       <Card className="p-6 lg:p-8 border-border/60 shadow-card">
         <h1 className="font-display font-bold text-2xl">Choose payment method</h1>
-        <p className="text-sm text-muted-foreground mt-1 inline-flex items-center gap-1"><ShieldCheck size={14} className="text-success"/> 100% secure & encrypted</p>
+        <p className="text-sm text-muted-foreground mt-1 inline-flex items-center gap-1">
+          <ShieldCheck size={14} className="text-success" /> 100% secure & encrypted
+        </p>
 
         <Tabs defaultValue="upi" className="mt-6">
           <TabsList className="grid grid-cols-3 w-full">
@@ -59,11 +69,16 @@ const Payment = () => {
             </div>
             <div className="grid grid-cols-4 gap-2">
               {["Google Pay", "PhonePe", "Paytm", "BHIM"].map((a) => (
-                <button key={a} className="rounded-lg border border-border/60 p-3 text-xs font-medium hover:border-accent hover:text-accent transition">{a}</button>
+                <button
+                  key={a}
+                  className="rounded-lg border border-border/60 p-3 text-xs font-medium hover:border-accent hover:text-accent transition"
+                >
+                  {a}
+                </button>
               ))}
             </div>
             <Button onClick={() => pay("UPI")} disabled={processing} size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Lock size={16} className="mr-2" /> {processing ? "Processing…" : `Pay ₹${total}`}
+              <Lock size={16} className="mr-2" />{processing ? "Processing…" : `Pay ₹${total}`}
             </Button>
           </TabsContent>
 
@@ -87,7 +102,7 @@ const Payment = () => {
               <Input id="cname" placeholder="John Doe" className="mt-1.5" />
             </div>
             <Button onClick={() => pay("Card")} disabled={processing} size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Lock size={16} className="mr-2" /> {processing ? "Processing…" : `Pay ₹${total}`}
+              <Lock size={16} className="mr-2" />{processing ? "Processing…" : `Pay ₹${total}`}
             </Button>
           </TabsContent>
 
@@ -95,14 +110,17 @@ const Payment = () => {
             <Label>Select your bank</Label>
             <RadioGroup defaultValue="hdfc" className="grid grid-cols-2 gap-2">
               {["HDFC Bank", "ICICI Bank", "SBI", "Axis Bank", "Kotak", "Yes Bank"].map((b) => (
-                <Label key={b} className="flex items-center gap-2 rounded-lg border border-border/60 p-3 cursor-pointer hover:border-accent">
+                <Label
+                  key={b}
+                  className="flex items-center gap-2 rounded-lg border border-border/60 p-3 cursor-pointer hover:border-accent"
+                >
                   <RadioGroupItem value={b} />
                   {b}
                 </Label>
               ))}
             </RadioGroup>
             <Button onClick={() => pay("Net Banking")} disabled={processing} size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-              <Lock size={16} className="mr-2" /> {processing ? "Processing…" : `Pay ₹${total}`}
+              <Lock size={16} className="mr-2" />{processing ? "Processing…" : `Pay ₹${total}`}
             </Button>
           </TabsContent>
         </Tabs>
@@ -114,13 +132,23 @@ const Payment = () => {
           <img src={draft.creatorImage} alt={draft.creatorName} className="h-12 w-12 rounded-lg object-cover" />
           <div>
             <div className="font-semibold text-sm">{draft.creatorName}</div>
-            <div className="text-xs text-muted-foreground">{new Date(draft.date).toLocaleDateString()} · {draft.time}</div>
+            <div className="text-xs text-muted-foreground">
+              {new Date(draft.date).toLocaleDateString()} · {draft.time}
+            </div>
           </div>
         </div>
         <div className="mt-5 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Session</span><span>₹{draft.price}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Platform fee</span><span>₹{Math.round(draft.price * 0.05)}</span></div>
-          <div className="flex justify-between font-display font-bold pt-3 border-t border-border/60"><span>Total</span><span>₹{total}</span></div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Session</span>
+            <span>₹{draft.price}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Platform fee</span>
+            <span>₹{Math.round(draft.price * 0.05)}</span>
+          </div>
+          <div className="flex justify-between font-display font-bold pt-3 border-t border-border/60">
+            <span>Total</span><span>₹{total}</span>
+          </div>
         </div>
       </Card>
     </div>

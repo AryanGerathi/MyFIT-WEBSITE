@@ -5,11 +5,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   LayoutDashboard, CalendarDays, Heart, User, Wallet, ClipboardList,
-  Users, Briefcase, CreditCard, FileBarChart, CalendarCheck,
+  Users, Briefcase, CreditCard, FileBarChart, CalendarCheck, Search,
 } from "lucide-react";
 
 import { PublicLayout } from "@/components/PublicLayout";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 import Index from "./pages/Index.tsx";
 import Explore from "./pages/Explore.tsx";
@@ -25,27 +26,28 @@ import NotFound from "./pages/NotFound.tsx";
 const queryClient = new QueryClient();
 
 const userItems = [
-  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "My Bookings", url: "/dashboard/bookings", icon: CalendarDays },
-  { title: "Saved Creators", url: "/dashboard/saved", icon: Heart },
-  { title: "Profile", url: "/dashboard/profile", icon: User },
+  { title: "Dashboard",      url: "/dashboard",               icon: LayoutDashboard },
+  { title: "My Bookings",    url: "/dashboard/bookings",      icon: CalendarDays },
+  { title: "Find Creators",  url: "/dashboard/find-creators", icon: Search },
+  { title: "Saved Creators", url: "/dashboard/saved",         icon: Heart },
+  { title: "Profile",        url: "/dashboard/profile",       icon: User },
 ];
 
 const creatorItems = [
-  { title: "Dashboard", url: "/creator-dashboard", icon: LayoutDashboard },
-  { title: "Schedule", url: "/creator-dashboard/schedule", icon: CalendarDays },
-  { title: "Bookings", url: "/creator-dashboard/bookings", icon: ClipboardList },
-  { title: "Earnings", url: "/creator-dashboard/earnings", icon: Wallet },
-  { title: "Profile", url: "/creator-dashboard/profile", icon: User },
+  { title: "Dashboard", url: "/creator-dashboard",           icon: LayoutDashboard },
+  { title: "Schedule",  url: "/creator-dashboard/schedule",  icon: CalendarDays },
+  { title: "Bookings",  url: "/creator-dashboard/bookings",  icon: ClipboardList },
+  { title: "Earnings",  url: "/creator-dashboard/earnings",  icon: Wallet },
+  { title: "Profile",   url: "/creator-dashboard/profile",   icon: User },
 ];
 
 const adminItems = [
-  { title: "Overview", url: "/admin", icon: LayoutDashboard },
-  { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Overview", url: "/admin",          icon: LayoutDashboard },
+  { title: "Users",    url: "/admin/users",    icon: Users },
   { title: "Creators", url: "/admin/creators", icon: Briefcase },
   { title: "Payments", url: "/admin/payments", icon: CreditCard },
   { title: "Bookings", url: "/admin/bookings", icon: CalendarCheck },
-  { title: "Reports", url: "/admin/reports", icon: FileBarChart },
+  { title: "Reports",  url: "/admin/reports",  icon: FileBarChart },
 ];
 
 const App = () => (
@@ -57,29 +59,43 @@ const App = () => (
         <Routes>
           {/* Public */}
           <Route element={<PublicLayout />}>
-            <Route path="/" element={<Index />} />
-            <Route path="/explore" element={<Explore />} />
+            <Route path="/"            element={<Index />} />
+            <Route path="/explore"     element={<Explore />} />
             <Route path="/creator/:id" element={<CreatorProfile />} />
-            <Route path="/booking" element={<Booking />} />
-            <Route path="/payment" element={<Payment />} />
+            <Route path="/booking"     element={<Booking />} />
+            <Route path="/payment"     element={<Payment />} />
           </Route>
 
-          {/* Auth (no public layout) */}
-          <Route path="/login" element={<Auth mode="login" />} />
+          {/* Auth */}
+          <Route path="/login"  element={<Auth mode="login" />} />
           <Route path="/signup" element={<Auth mode="signup" />} />
 
-          {/* User dashboard */}
-          <Route element={<DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />}>
+          {/* User dashboard — protected */}
+          <Route element={
+            <ProtectedRoute requiredRole="user">
+              <DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />
+            </ProtectedRoute>
+          }>
+            {/* /* wildcard lets UserDashboardRoutes handle all sub-paths
+                including the new /dashboard/creator/:id we add inside it */}
             <Route path="/dashboard/*" element={<UserDashboardRoutes />} />
           </Route>
 
-          {/* Creator dashboard */}
-          <Route element={<DashboardLayout items={creatorItems} brandLabel="Creator" title="Creator Studio" />}>
+          {/* Creator dashboard — protected */}
+          <Route element={
+            <ProtectedRoute requiredRole="creator">
+              <DashboardLayout items={creatorItems} brandLabel="Creator" title="Creator Studio" />
+            </ProtectedRoute>
+          }>
             <Route path="/creator-dashboard/*" element={<CreatorDashboardRoutes />} />
           </Route>
 
-          {/* Admin dashboard */}
-          <Route element={<DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />}>
+          {/* Admin dashboard — protected */}
+          <Route element={
+            <ProtectedRoute>
+              <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />
+            </ProtectedRoute>
+          }>
             <Route path="/admin/*" element={<AdminDashboardRoutes />} />
           </Route>
 

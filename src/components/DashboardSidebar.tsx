@@ -8,6 +8,7 @@ import type { LucideIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { authService } from "@/services/backendService";
 
 export type SidebarItem = { title: string; url: string; icon: LucideIcon };
 
@@ -16,6 +17,12 @@ export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; 
   const collapsed = state === "collapsed";
   const { pathname } = useLocation();
   const navigate = useNavigate();
+
+  const handleLogout = () => {
+    authService.clearSession();
+    toast.success("Logged out successfully");
+    navigate("/login");
+  };
 
   return (
     <Sidebar collapsible="icon">
@@ -26,8 +33,12 @@ export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; 
           </span>
           {!collapsed && (
             <div className="flex flex-col leading-tight">
-              <span className="font-display font-bold text-base text-sidebar-foreground">My<span className="text-accent">Fit</span></span>
-              <span className="text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">{brandLabel}</span>
+              <span className="font-display font-bold text-base text-sidebar-foreground">
+                My<span className="text-accent">Fit</span>
+              </span>
+              <span className="text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">
+                {brandLabel}
+              </span>
             </div>
           )}
         </Link>
@@ -68,7 +79,7 @@ export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; 
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              onClick={() => { toast.success("Logged out"); navigate("/"); }}
+              onClick={handleLogout}
               className="text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             >
               <LogOut className="h-4 w-4 shrink-0" />

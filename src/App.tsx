@@ -55,7 +55,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL}>
         <Routes>
           {/* Public */}
           <Route element={<PublicLayout />}>
@@ -76,8 +76,6 @@ const App = () => (
               <DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />
             </ProtectedRoute>
           }>
-            {/* /* wildcard lets UserDashboardRoutes handle all sub-paths
-                including the new /dashboard/creator/:id we add inside it */}
             <Route path="/dashboard/*" element={<UserDashboardRoutes />} />
           </Route>
 

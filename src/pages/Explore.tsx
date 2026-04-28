@@ -13,7 +13,7 @@ import { creatorService, type PublicCreator } from "@/services/backendService";
 
 const STATIC_CATEGORIES = ["All", "Fat Loss", "Muscle Gain", "Yoga", "Cardio", "Strength", "General"];
 const MAX_RETRIES = 3;
-const RETRY_DELAYS = [4000, 8000, 12000]; // ms between each retry
+const RETRY_DELAYS = [4000, 8000, 12000];
 
 // ── Filters panel ─────────────────────────────────────────────────────────────
 function Filters({
@@ -21,11 +21,13 @@ function Filters({
   category, setCategory,
   price,    setPrice,
   minRating, setMinRating,
+  priceType, setPriceType,
 }: {
   categories: string[];
   category: string;   setCategory:  (v: string) => void;
   price: number;      setPrice:     (v: number) => void;
   minRating: number;  setMinRating: (v: number) => void;
+  priceType: "monthly" | "session"; setPriceType: (v: "monthly" | "session") => void;
 }) {
   return (
     <div className="space-y-6">
@@ -40,19 +42,48 @@ function Filters({
           </SelectContent>
         </Select>
       </div>
+
+      {/* Price Type Toggle */}
+      <div>
+        <Label className="font-display font-semibold mb-3 block">Price Type</Label>
+        <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
+          <button
+            onClick={() => { setPriceType("monthly"); setPrice(5000); }}
+            className={`flex-1 py-1.5 transition-colors ${
+              priceType === "monthly"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => { setPriceType("session"); setPrice(5000); }}
+            className={`flex-1 py-1.5 transition-colors ${
+              priceType === "session"
+                ? "bg-accent text-accent-foreground"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            Per Session
+          </button>
+        </div>
+      </div>
+
       <div>
         <Label className="font-display font-semibold mb-3 block">
-          Max Price: ₹{price}
+          Max {priceType === "monthly" ? "Monthly" : "Per Session"} Price: ₹{price.toLocaleString()}
         </Label>
         <Slider
           value={[price]}
           onValueChange={([v]) => setPrice(v)}
-          min={300} max={5000} step={50}
+          min={300} max={100000} step={50}
         />
         <div className="flex justify-between text-xs text-muted-foreground mt-2">
-          <span>₹300</span><span>₹5,000</span>
+          <span>₹300</span><span>₹1,00,000</span>
         </div>
       </div>
+
       <div>
         <Label className="font-display font-semibold mb-3 block">
           Min Rating: {minRating > 0 ? `${minRating}★` : "Any"}
@@ -76,12 +107,13 @@ const Explore = () => {
   const [loading,     setLoading]     = useState(true);
   const [error,       setError]       = useState<string | null>(null);
   const [retryCount,  setRetryCount]  = useState(0);
-  const [retryingIn,  setRetryingIn]  = useState<number | null>(null); // countdown seconds
+  const [retryingIn,  setRetryingIn]  = useState<number | null>(null);
 
   const [category,  setCategory]  = useState("All");
   const [price,     setPrice]     = useState(5000);
   const [minRating, setMinRating] = useState(0);
   const [sort,      setSort]      = useState("popular");
+  const [priceType, setPriceType] = useState<"monthly" | "session">("monthly");
 
   useEffect(() => {
     setLoading(true);
@@ -95,7 +127,6 @@ const Explore = () => {
       })
       .catch((err: Error) => {
         if (retryCount < MAX_RETRIES) {
-          // Auto-retry with countdown
           const delayMs = RETRY_DELAYS[retryCount] ?? 10000;
           let remaining = Math.round(delayMs / 1000);
           setRetryingIn(remaining);
@@ -120,7 +151,6 @@ const Explore = () => {
       });
   }, [retryCount]);
 
-  // Derive categories dynamically from fetched data
   const categories = useMemo(() => {
     const seen = new Set<string>();
     creators.forEach((c) => {
@@ -132,23 +162,40 @@ const Explore = () => {
 
   const filtered = useMemo(() => {
     let list = creators.filter((c) => {
-      const dailyPrice = c.creatorProfile?.dailyPrice ?? 0;
-      const rating     = c.creatorProfile?.rating     ?? 0;
+      const monthly    = c.creatorProfile?.monthlyPrice   ?? 0;
+      const sessions   = c.creatorProfile?.monthlySessions ?? 1;
+      const perSession = sessions > 0 ? Math.round(monthly / sessions) : 0;
+      const priceVal   = priceType === "monthly" ? monthly : perSession;
+      const rating     = c.creatorProfile?.rating ?? 0;
       const spec       = c.creatorProfile?.specialization ?? "";
 
       return (
         (category === "All" || spec === category) &&
-        (dailyPrice === 0 || dailyPrice <= price) &&
+        (priceVal === 0 || priceVal <= price) &&
         rating >= minRating
       );
     });
 
-    if (sort === "price-asc")  list = [...list].sort((a, b) => (a.creatorProfile?.dailyPrice ?? 0) - (b.creatorProfile?.dailyPrice ?? 0));
-    if (sort === "price-desc") list = [...list].sort((a, b) => (b.creatorProfile?.dailyPrice ?? 0) - (a.creatorProfile?.dailyPrice ?? 0));
-    if (sort === "rating")     list = [...list].sort((a, b) => (b.creatorProfile?.rating    ?? 0) - (a.creatorProfile?.rating    ?? 0));
-    if (sort === "popular")    list = [...list].sort((a, b) => (b.creatorProfile?.reviews   ?? 0) - (a.creatorProfile?.reviews   ?? 0));
+    if (sort === "price-asc")  list = [...list].sort((a, b) => {
+      const getPrice = (c: PublicCreator) => {
+        const m = c.creatorProfile?.monthlyPrice ?? 0;
+        const s = c.creatorProfile?.monthlySessions ?? 1;
+        return priceType === "monthly" ? m : Math.round(m / s);
+      };
+      return getPrice(a) - getPrice(b);
+    });
+    if (sort === "price-desc") list = [...list].sort((a, b) => {
+      const getPrice = (c: PublicCreator) => {
+        const m = c.creatorProfile?.monthlyPrice ?? 0;
+        const s = c.creatorProfile?.monthlySessions ?? 1;
+        return priceType === "monthly" ? m : Math.round(m / s);
+      };
+      return getPrice(b) - getPrice(a);
+    });
+    if (sort === "rating")  list = [...list].sort((a, b) => (b.creatorProfile?.rating  ?? 0) - (a.creatorProfile?.rating  ?? 0));
+    if (sort === "popular") list = [...list].sort((a, b) => (b.creatorProfile?.reviews ?? 0) - (a.creatorProfile?.reviews ?? 0));
     return list;
-  }, [creators, category, price, minRating, sort]);
+  }, [creators, category, price, minRating, sort, priceType]);
 
   // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
@@ -221,6 +268,7 @@ const Explore = () => {
               category={category}   setCategory={setCategory}
               price={price}         setPrice={setPrice}
               minRating={minRating} setMinRating={setMinRating}
+              priceType={priceType} setPriceType={setPriceType}
             />
           </Card>
         </aside>
@@ -233,13 +281,14 @@ const Explore = () => {
                   <Filter size={16} /> Filters
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="w-80">
+              <SheetContent side="left" className="w-80 overflow-y-auto">
                 <h2 className="font-display font-semibold mb-5 mt-4">Filters</h2>
                 <Filters
                   categories={categories}
                   category={category}   setCategory={setCategory}
                   price={price}         setPrice={setPrice}
                   minRating={minRating} setMinRating={setMinRating}
+                  priceType={priceType} setPriceType={setPriceType}
                 />
               </SheetContent>
             </Sheet>
@@ -266,9 +315,12 @@ const Explore = () => {
             <div className="flex flex-col gap-4">
               {filtered.map((c) => {
                 const initials   = c.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
-                const dailyPrice = c.creatorProfile?.dailyPrice ?? 0;
-                const rating     = c.creatorProfile?.rating     ?? 0;
-                const reviews    = c.creatorProfile?.reviews    ?? 0;
+                const monthly    = c.creatorProfile?.monthlyPrice    ?? 0;
+                const sessions   = c.creatorProfile?.monthlySessions ?? 1;
+                const perSession = sessions > 0 ? Math.round(monthly / sessions) : 0;
+                const displayPrice = priceType === "monthly" ? monthly : perSession;
+                const rating     = c.creatorProfile?.rating   ?? 0;
+                const reviews    = c.creatorProfile?.reviews  ?? 0;
                 const specialty  = c.creatorProfile?.specialization ?? "";
 
                 return (
@@ -308,13 +360,15 @@ const Explore = () => {
 
                     {/* Price + CTA */}
                     <div className="flex flex-col items-end gap-2 shrink-0">
-                      <div>
-                        {dailyPrice > 0 ? (
+                      <div className="text-right">
+                        {displayPrice > 0 ? (
                           <>
                             <span className="font-display font-bold text-lg text-primary">
-                              ₹{dailyPrice.toLocaleString()}
+                              ₹{displayPrice.toLocaleString()}
                             </span>
-                            <span className="text-xs text-muted-foreground">/session</span>
+                            <span className="text-xs text-muted-foreground">
+                              /{priceType === "monthly" ? "month" : "session"}
+                            </span>
                           </>
                         ) : (
                           <span className="text-sm text-muted-foreground italic">Pricing TBD</span>

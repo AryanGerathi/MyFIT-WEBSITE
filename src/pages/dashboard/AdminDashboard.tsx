@@ -7,7 +7,7 @@ import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
 } from "@/components/ui/table";
-import { transactions, revenueData, userBookings } from "@/data/mock";
+import { revenueData, userBookings } from "@/data/mock";
 import {
   Users, Briefcase, Wallet, CalendarCheck,
   Check, X, ShieldCheck, Loader2, RefreshCw,
@@ -18,9 +18,14 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import { useState, useEffect, useCallback } from "react";
-import { adminService, AdminCreator, AdminUser } from "@/services/backendService";
+import {
+  adminService,
+  AdminCreator,
+  AdminUser,
+  AdminPayment,
+} from "@/services/backendService";
 
-// ── Shared helpers ─────────────────────────────────────────────────────────────
+// ── Shared helpers ────────────────────────────────────────────────────────────
 
 function EmptyRow({ cols, message }: { cols: number; message: string }) {
   return (
@@ -52,7 +57,7 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
   );
 }
 
-// ── Phone helper ───────────────────────────────────────────────────────────────
+// ── Phone helper ──────────────────────────────────────────────────────────────
 
 function PhoneCell({ phone }: { phone?: { countryCode?: string; number?: string } }) {
   if (!phone?.number) return <span className="text-muted-foreground">—</span>;
@@ -66,17 +71,20 @@ function PhoneCell({ phone }: { phone?: { countryCode?: string; number?: string 
 // ── Overview ──────────────────────────────────────────────────────────────────
 
 function Overview() {
-  const [stats, setStats] = useState<{ users: number; creators: number } | null>(null);
+  const [stats, setStats]   = useState<{ users: number; creators: number; revenue: number; bookings: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
     try {
-      const [{ users }, { creators }] = await Promise.all([
+      const [{ users }, { creators }, { payments }] = await Promise.all([
         adminService.getUsers(),
         adminService.getCreators(),
+        adminService.getPayments(),
       ]);
-      setStats({ users: users.length, creators: creators.length });
+      const revenue  = payments.reduce((sum, p) => sum + p.amount, 0);
+      const bookings = payments.length;
+      setStats({ users: users.length, creators: creators.length, revenue, bookings });
     } catch {
       // silently fall back to dashes
     } finally {
@@ -101,8 +109,17 @@ function Overview() {
           icon={Briefcase}
           trend="+5 this week"
         />
-        <KpiCard label="Revenue (MTD)" value="₹1,04,000" icon={Wallet}        trend="+18% MoM" />
-        <KpiCard label="Bookings"      value="412"        icon={CalendarCheck} />
+        <KpiCard
+          label="Revenue (total)"
+          value={loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}`}
+          icon={Wallet}
+          trend="+18% MoM"
+        />
+        <KpiCard
+          label="Bookings"
+          value={loading ? "—" : String(stats?.bookings ?? "—")}
+          icon={CalendarCheck}
+        />
       </div>
 
       <Card className="p-6 border-border/60 shadow-card">
@@ -270,8 +287,6 @@ function CreatorsPage() {
 
   return (
     <div className="space-y-6">
-
-      {/* ── Pending verification ─────────────────────────────────────────────── */}
       <Card className="border-border/60 shadow-card overflow-hidden">
         <div className="p-5 border-b border-border/60 flex items-center justify-between">
           <div>
@@ -331,7 +346,6 @@ function CreatorsPage() {
         </Table>
       </Card>
 
-      {/* ── Verified creators ─────────────────────────────────────────────────── */}
       <Card className="border-border/60 shadow-card overflow-hidden">
         <div className="p-5 border-b border-border/60">
           <h2 className="font-display font-semibold flex items-center gap-2">
@@ -389,16 +403,45 @@ function CreatorsPage() {
 // ── Payments ──────────────────────────────────────────────────────────────────
 
 function PaymentsPage() {
+  const [payments, setPayments] = useState<AdminPayment[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+
+  const fetchPayments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { payments: p } = await adminService.getPayments();
+      setPayments(p);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not load payments.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchPayments(); }, [fetchPayments]);
+
   const statusColor = (s: string) =>
     s === "success" ? "bg-green-100 text-green-700" :
-    s === "pending"  ? "bg-amber-100 text-amber-700"  :
+    s === "pending" ? "bg-amber-100 text-amber-700" :
     "bg-red-100 text-red-700";
+
+  if (loading) return <LoadingState message="Loading payments…" />;
+  if (error)   return <ErrorState  message={error} onRetry={fetchPayments} />;
 
   return (
     <Card className="border-border/60 shadow-card overflow-hidden">
-      <div className="p-5 border-b border-border/60">
-        <h2 className="font-display font-semibold">Transactions</h2>
-        <p className="text-sm text-muted-foreground">{transactions.length} records</p>
+      <div className="p-5 border-b border-border/60 flex items-center justify-between">
+        <div>
+          <h2 className="font-display font-semibold">Transactions</h2>
+          <p className="text-sm text-muted-foreground">{payments.length} records</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchPayments} className="gap-2">
+          <RefreshCw size={13} /> Refresh
+        </Button>
       </div>
       <Table>
         <TableHeader>
@@ -406,19 +449,25 @@ function PaymentsPage() {
             <TableHead>Date</TableHead>
             <TableHead>User</TableHead>
             <TableHead>Creator</TableHead>
+            <TableHead>Type</TableHead>
             <TableHead>Amount</TableHead>
             <TableHead>Commission</TableHead>
             <TableHead>Status</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="text-muted-foreground">{t.date}</TableCell>
-              <TableCell>{t.user}</TableCell>
-              <TableCell>{t.creator}</TableCell>
-              <TableCell className="font-medium">₹{t.amount}</TableCell>
-              <TableCell>₹{t.commission}</TableCell>
+          {payments.map((t) => (
+            <TableRow key={t._id}>
+              <TableCell className="text-muted-foreground">
+                {new Date(t.createdAt).toLocaleDateString("en-IN", {
+                  day: "numeric", month: "short", year: "numeric",
+                })}
+              </TableCell>
+              <TableCell>{t.userId?.name ?? "—"}</TableCell>
+              <TableCell>{t.creatorId?.name ?? "—"}</TableCell>
+              <TableCell className="capitalize">{t.sessionType}</TableCell>
+              <TableCell className="font-medium">₹{t.amount.toLocaleString()}</TableCell>
+              <TableCell>₹{t.commission.toLocaleString()}</TableCell>
               <TableCell>
                 <span className={`px-2 py-1 rounded-md text-xs font-medium ${statusColor(t.status)}`}>
                   {t.status}
@@ -426,7 +475,7 @@ function PaymentsPage() {
               </TableCell>
             </TableRow>
           ))}
-          {transactions.length === 0 && <EmptyRow cols={6} message="No transactions found." />}
+          {payments.length === 0 && <EmptyRow cols={7} message="No transactions found." />}
         </TableBody>
       </Table>
     </Card>
@@ -479,16 +528,27 @@ function BookingsPage() {
 // ── Reports ───────────────────────────────────────────────────────────────────
 
 function ReportsPage() {
-  const stats = [
-    { label: "Monthly revenue",   value: "₹1,04,000" },
-    { label: "Avg session price", value: "₹685"       },
-    { label: "New users (30d)",   value: "+184"        },
-    { label: "Refund rate",       value: "1.2%"        },
+  const [stats, setStats]     = useState<{ revenue: number; avgPrice: number; bookings: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    adminService.getPayments().then(({ payments }) => {
+      const revenue  = payments.reduce((s, p) => s + p.amount, 0);
+      const avgPrice = payments.length ? Math.round(revenue / payments.length) : 0;
+      setStats({ revenue, avgPrice, bookings: payments.length });
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  const cards = [
+    { label: "Total revenue",     value: loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}` },
+    { label: "Avg session price", value: loading ? "—" : `₹${(stats?.avgPrice ?? 0).toLocaleString()}` },
+    { label: "Total bookings",    value: loading ? "—" : String(stats?.bookings ?? "—") },
+    { label: "Refund rate",       value: "0%" },
   ];
 
   return (
     <div className="grid sm:grid-cols-2 gap-4">
-      {stats.map((s, i) => (
+      {cards.map((s, i) => (
         <Card key={i} className="p-6 border-border/60 shadow-card">
           <p className="text-sm text-muted-foreground">{s.label}</p>
           <p className="font-display font-bold text-3xl mt-2">{s.value}</p>

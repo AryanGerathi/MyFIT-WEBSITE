@@ -76,6 +76,30 @@ export interface AdminUser {
   createdAt: string;
 }
 
+export interface AdminPayment {
+  _id:               string;
+  userId:            { name: string; email: string };
+  creatorId:         { name: string; email: string };
+  razorpayPaymentId: string;
+  amount:            number;
+  commission:        number;
+  sessionType:       string;
+  status:            string;
+  createdAt:         string;
+}
+
+export interface UserBooking {
+  _id:         string;
+  creatorId:   { name: string; email: string } | null;
+  amount:      number;
+  commission:  number;
+  sessionType: string;
+  date?:       string | null;
+  time?:       string | null;
+  status:      string;
+  createdAt:   string;
+}
+
 export interface SignupPayload {
   name: string;
   email: string;
@@ -107,6 +131,36 @@ export interface UpdateProfilePayload {
   countryCode: string;
   specialization: string;
   bio: string;
+}
+
+// ─── Payment types ────────────────────────────────────────────────────────────
+
+export interface CreateOrderResponse {
+  success: true;
+  order: {
+    id: string;
+    amount: number;
+    currency: string;
+  };
+}
+
+export interface VerifyPaymentPayload {
+  razorpay_order_id:   string;
+  razorpay_payment_id: string;
+  razorpay_signature:  string;
+  // booking metadata
+  creatorId:   string;
+  amount:      number;
+  commission:  number;
+  sessionType: string;
+  date?:       string | null;
+  time?:       string | null;
+}
+
+export interface VerifyPaymentResponse {
+  success: true;
+  message: string;
+  paymentId: string;
 }
 
 // ─── API Response shapes ──────────────────────────────────────────────────────
@@ -165,6 +219,16 @@ interface AdminUsersResponse {
   users: AdminUser[];
 }
 
+interface AdminPaymentsResponse {
+  success: true;
+  payments: AdminPayment[];
+}
+
+interface UserBookingsResponse {
+  success: true;
+  bookings: UserBooking[];
+}
+
 interface VerifyCreatorResponse {
   success: true;
   message: string;
@@ -197,7 +261,6 @@ async function apiFetch<T>(
 ): Promise<T> {
   const token = localStorage.getItem("myfit_token");
 
-  // 20s timeout — covers Render free tier cold starts (~15–30s)
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
 
@@ -380,6 +443,9 @@ export const adminService = {
 
   getUsers: () =>
     apiFetch<AdminUsersResponse>("/api/admin/users"),
+
+  getPayments: () =>
+    apiFetch<AdminPaymentsResponse>("/api/admin/payments"),
 };
 
 // ─── Creator Service (public endpoints — no auth required) ───────────────────
@@ -387,4 +453,23 @@ export const adminService = {
 export const creatorService = {
   getVerifiedCreators: () =>
     apiFetch<PublicCreatorsResponse>("/api/creator/public"),
+};
+
+// ─── Payment Service ──────────────────────────────────────────────────────────
+
+export const paymentService = {
+  createOrder: (amount: number) =>
+    apiFetch<CreateOrderResponse>("/api/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
+
+  verifyPayment: (payload: VerifyPaymentPayload) =>
+    apiFetch<VerifyPaymentResponse>("/api/payment/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getMyBookings: () =>                                        // ✅ added
+    apiFetch<UserBookingsResponse>("/api/payment/my-bookings"),
 };

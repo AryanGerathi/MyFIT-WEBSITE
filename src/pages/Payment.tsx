@@ -29,7 +29,6 @@ const Payment = () => {
   const [draft,       setDraft]       = useState<any>(null);
   const [processing,  setProcessing]  = useState(false);
 
-  // Set after successful payment — used to show the Join button immediately
   const [roomUrl,     setRoomUrl]     = useState<string | null>(null);
   const [bookingId,   setBookingId]   = useState<string | null>(null);
   const [paid,        setPaid]        = useState(false);
@@ -73,8 +72,8 @@ const Payment = () => {
     try {
       const res = await paymentService.createOrder(total);
       order = res.order;
-    } catch (err: any) {
-      toast.error(err.message || "Could not create order. Try again.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Could not create order. Try again.");
       setProcessing(false);
       return;
     }
@@ -89,6 +88,28 @@ const Payment = () => {
       order_id:    order.id,
       prefill:     { name: draft.creatorName },
       theme:       { color: "#6366f1" },
+
+      // ✅ Forces UPI to show on all devices including Android
+      config: {
+        display: {
+          blocks: {
+            upi: {
+              name: "Pay via UPI",
+              instruments: [{ method: "upi" }],
+            },
+            other: {
+              name: "Other Payment Methods",
+              instruments: [
+                { method: "card" },
+                { method: "netbanking" },
+                { method: "wallet" },
+              ],
+            },
+          },
+          sequence: ["block.upi", "block.other"],
+          preferences: { show_default_blocks: false },
+        },
+      },
 
       handler: async (response: {
         razorpay_order_id:   string;
@@ -117,8 +138,8 @@ const Payment = () => {
           toast.success("Payment successful!", {
             description: "Your session is confirmed. Join your room below.",
           });
-        } catch (err: any) {
-          toast.error(err.message || "Payment verification failed.");
+        } catch (err: unknown) {
+          toast.error(err instanceof Error ? err.message : "Payment verification failed.");
         } finally {
           setProcessing(false);
         }
@@ -153,11 +174,11 @@ const Payment = () => {
               ✅ Booking confirmed!
             </p>
             <p className="text-sm text-green-700">
-              Your session room has been created. You can join now or find it anytime in your bookings.
+              Your session room has been created. You can join now or find it
+              anytime in your bookings.
             </p>
 
             <div className="flex flex-wrap gap-3">
-              {/* Shows dialog with real Jitsi URL — no random link */}
               <VideoCallButton
                 label="Join Session Now"
                 clientName={draft.creatorName}
@@ -166,7 +187,9 @@ const Payment = () => {
               />
               <Button
                 variant="outline"
-                onClick={() => navigate(inDashboard ? "/dashboard/bookings" : "/dashboard")}
+                onClick={() =>
+                  navigate(inDashboard ? "/dashboard/bookings" : "/dashboard")
+                }
               >
                 Go to My Bookings
               </Button>

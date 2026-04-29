@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Lock, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { paymentService } from "@/services/backendService";
+import { VideoCallButton } from "@/components/VideoCallButton";
 
 declare global {
   interface Window { Razorpay: any; }
@@ -13,19 +14,25 @@ declare global {
 const loadRazorpayScript = (): Promise<boolean> =>
   new Promise((resolve) => {
     if (document.getElementById("razorpay-script")) return resolve(true);
-    const script = document.createElement("script");
-    script.id    = "razorpay-script";
-    script.src   = "https://checkout.razorpay.com/v1/checkout.js";
-    script.onload  = () => resolve(true);
-    script.onerror = () => resolve(false);
+    const script    = document.createElement("script");
+    script.id       = "razorpay-script";
+    script.src      = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload   = () => resolve(true);
+    script.onerror  = () => resolve(false);
     document.body.appendChild(script);
   });
 
 const Payment = () => {
-  const navigate   = useNavigate();
-  const location   = useLocation();
-  const [draft, setDraft]           = useState<any>(null);
-  const [processing, setProcessing] = useState(false);
+  const navigate  = useNavigate();
+  const location  = useLocation();
+
+  const [draft,       setDraft]       = useState<any>(null);
+  const [processing,  setProcessing]  = useState(false);
+
+  // Set after successful payment — used to show the Join button immediately
+  const [roomUrl,     setRoomUrl]     = useState<string | null>(null);
+  const [bookingId,   setBookingId]   = useState<string | null>(null);
+  const [paid,        setPaid]        = useState(false);
 
   const inDashboard = location.pathname.startsWith("/dashboard");
 
@@ -89,8 +96,8 @@ const Payment = () => {
         razorpay_signature:  string;
       }) => {
         try {
-          // 4. Verify + save to DB with booking metadata ✅
-          await paymentService.verifyPayment({
+          // 4. Verify + save booking, backend returns jitsiRoomUrl
+          const data = await paymentService.verifyPayment({
             ...response,
             creatorId:   draft.creatorId,
             amount:      total,
@@ -99,11 +106,17 @@ const Payment = () => {
             date:        draft.date  ?? null,
             time:        draft.time  ?? null,
           });
+
           sessionStorage.removeItem("myfit:booking");
+
+          // 5. Store room URL & booking ID from response
+          setRoomUrl(data.jitsiRoomUrl   ?? null);
+          setBookingId(data.booking?._id ?? null);
+          setPaid(true);
+
           toast.success("Payment successful!", {
-            description: "Your session is confirmed.",
+            description: "Your session is confirmed. Join your room below.",
           });
-          navigate(inDashboard ? "/dashboard/bookings" : "/dashboard");
         } catch (err: any) {
           toast.error(err.message || "Payment verification failed.");
         } finally {
@@ -124,26 +137,57 @@ const Payment = () => {
 
   return (
     <div className="container-app py-10 max-w-5xl grid lg:grid-cols-[1fr_360px] gap-6">
-      <Card className="p-6 lg:p-8 border-border/60 shadow-card">
-        <h1 className="font-display font-bold text-2xl">Complete your payment</h1>
-        <p className="text-sm text-muted-foreground mt-1 inline-flex items-center gap-1">
-          <ShieldCheck size={14} className="text-success" /> 100% secure & encrypted via Razorpay
-        </p>
-
-        <div className="mt-8">
-          <Button
-            onClick={pay}
-            disabled={processing}
-            size="lg"
-            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-          >
-            <Lock size={16} className="mr-2" />
-            {processing ? "Opening payment…" : `Pay ₹${total}`}
-          </Button>
-          <p className="text-xs text-muted-foreground text-center mt-3">
-            Supports UPI · Cards · Net Banking · Wallets
+      <Card className="p-6 lg:p-8 border-border/60 shadow-card space-y-8">
+        <div>
+          <h1 className="font-display font-bold text-2xl">Complete your payment</h1>
+          <p className="text-sm text-muted-foreground mt-1 inline-flex items-center gap-1">
+            <ShieldCheck size={14} className="text-success" />
+            100% secure &amp; encrypted via Razorpay
           </p>
         </div>
+
+        {/* ── After payment: show room link + navigation ── */}
+        {paid ? (
+          <div className="rounded-xl border border-green-200 bg-green-50 p-5 space-y-4">
+            <p className="font-semibold text-green-800">
+              ✅ Booking confirmed!
+            </p>
+            <p className="text-sm text-green-700">
+              Your session room has been created. You can join now or find it anytime in your bookings.
+            </p>
+
+            <div className="flex flex-wrap gap-3">
+              {/* Shows dialog with real Jitsi URL — no random link */}
+              <VideoCallButton
+                label="Join Session Now"
+                clientName={draft.creatorName}
+                roomUrl={roomUrl ?? undefined}
+                bookingId={bookingId ?? undefined}
+              />
+              <Button
+                variant="outline"
+                onClick={() => navigate(inDashboard ? "/dashboard/bookings" : "/dashboard")}
+              >
+                Go to My Bookings
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            <Button
+              onClick={pay}
+              disabled={processing}
+              size="lg"
+              className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+            >
+              <Lock size={16} className="mr-2" />
+              {processing ? "Opening payment…" : `Pay ₹${total}`}
+            </Button>
+            <p className="text-xs text-muted-foreground text-center mt-3">
+              Supports UPI · Cards · Net Banking · Wallets
+            </p>
+          </div>
+        )}
       </Card>
 
       {/* ── Order Summary ── */}
@@ -158,7 +202,10 @@ const Payment = () => {
           <div>
             <div className="font-semibold text-sm">{draft.creatorName}</div>
             <div className="text-xs text-muted-foreground">
-              {draft.date ? new Date(draft.date).toLocaleDateString() : "Monthly plan"} · {draft.time ?? "—"}
+              {draft.date
+                ? new Date(draft.date).toLocaleDateString()
+                : "Monthly plan"}{" "}
+              · {draft.time ?? "—"}
             </div>
           </div>
         </div>

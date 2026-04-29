@@ -91,12 +91,14 @@ export interface AdminPayment {
 export interface UserBooking {
   _id:         string;
   creatorId:   { name: string; email: string } | null;
+  userId:      { name: string; email: string } | null;
   amount:      number;
   commission:  number;
   sessionType: string;
   date?:       string | null;
   time?:       string | null;
   status:      string;
+  jitsiRoomId?: string | null;    // ← add this
   createdAt:   string;
 }
 
@@ -161,6 +163,8 @@ export interface VerifyPaymentResponse {
   success: true;
   message: string;
   paymentId: string;
+  jitsiRoomUrl: string;           // ← add this
+  booking:      UserBooking;  
 }
 
 // ─── API Response shapes ──────────────────────────────────────────────────────
@@ -469,6 +473,16 @@ export const paymentService = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+    
+    getRoomUrl: (bookingId: string) =>
+      apiFetch<{ success: true; roomId: string; roomUrl: string }>(
+        `/api/payment/booking/${bookingId}/room`
+      ),
+
+    getMyCreatorBookings: () =>
+      apiFetch<{ success: true; bookings: (UserBooking & { userId: { name: string; email: string } | null })[] }>(
+        "/api/payment/my-creator-bookings"
+      ),
 
   getMyBookings: () =>                                        // ✅ added
     apiFetch<UserBookingsResponse>("/api/payment/my-bookings"),

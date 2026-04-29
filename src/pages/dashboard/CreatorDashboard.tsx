@@ -5,89 +5,85 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Calendar } from "@/components/ui/calendar";
 import { VideoCallButton } from "@/components/VideoCallButton";
-import { creatorBookings } from "@/data/mock";
 import {
   Wallet, Users, Calendar as CalIcon, TrendingUp,
-  Plus, Check, IndianRupee, Pencil, Camera, Trash2, Loader2,
-  ShieldCheck, Clock,
+  Check, IndianRupee, Pencil, Camera, Trash2, Loader2,
+  ShieldCheck, Clock, AlertCircle,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { authService, APIError, Pricing } from "@/services/backendService";
-
-// ── All possible time slots ───────────────────────────────────────────────────
-const ALL_SLOTS = [
-  "6:00 AM", "7:00 AM", "8:00 AM", "9:00 AM",
-  "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM",
-  "2:00 PM",  "3:00 PM",  "4:00 PM",  "5:00 PM",
-  "6:00 PM",  "7:00 PM",  "8:00 PM",
-];
+import {
+  authService, paymentService, APIError, Pricing,
+  type UserBooking,
+} from "@/services/backendService";
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 function Overview() {
+  const [bookings, setBookings] = useState<UserBooking[]>([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    paymentService.getMyCreatorBookings()
+      .then(({ bookings: b }) => setBookings(b))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const upcoming      = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
+  const totalEarnings = bookings.reduce((sum, b) => sum + (b.amount - b.commission), 0);
+
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total earnings"    value="₹84,200" icon={Wallet}     trend="+12% MoM" />
-        <KpiCard label="Total clients"     value="48"       icon={Users}      trend="+5 this week" />
-        <KpiCard label="Upcoming sessions" value={String(creatorBookings.filter(b => b.status === "upcoming").length)} icon={CalIcon} />
-        <KpiCard label="Avg rating"        value="4.9★"     icon={TrendingUp} />
+        <KpiCard
+          label="Total earnings"
+          value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`}
+          icon={Wallet}
+          trend="+12% MoM"
+        />
+        <KpiCard
+          label="Total clients"
+          value={loading ? "—" : String(bookings.length)}
+          icon={Users}
+        />
+        <KpiCard
+          label="Upcoming sessions"
+          value={loading ? "—" : String(upcoming.length)}
+          icon={CalIcon}
+        />
+        <KpiCard label="Avg rating" value="4.9★" icon={TrendingUp} />
       </div>
+
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-4">Today's sessions</h2>
-        <div className="space-y-3">
-          {creatorBookings.filter(b => b.status === "upcoming").slice(0, 3).map((b) => (
-            <div key={b.id} className="flex items-center justify-between p-4 rounded-lg border border-border/60 gap-3">
-              <div>
-                <div className="font-semibold">{b.creatorName}</div>
-                <div className="text-sm text-muted-foreground">{format(new Date(b.date), "PP")} · {b.time}</div>
+        {loading ? (
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <Loader2 className="animate-spin" size={16} /> Loading…
+          </div>
+        ) : upcoming.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No upcoming sessions.</p>
+        ) : (
+          <div className="space-y-3">
+            {upcoming.slice(0, 3).map((b) => (
+              <div key={b._id} className="flex items-center justify-between p-4 rounded-lg border border-border/60 gap-3">
+                <div>
+                  <div className="font-semibold">{b.userId?.name ?? "Client"}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
+                  </div>
+                </div>
+                {/* ✅ bookingId passed */}
+                <VideoCallButton
+                  label="Start Session"
+                  clientName={b.userId?.name ?? "Client"}
+                  bookingId={b._id}
+                />
               </div>
-              <VideoCallButton label="Start Session" clientName={b.creatorName} />
-            </div>
-          ))}
-        </div>
-      </Card>
-    </div>
-  );
-}
-
-// ── Schedule ──────────────────────────────────────────────────────────────────
-function Schedule() {
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selected, setSelected] = useState<string[]>([]);
-  const toggle = (t: string) =>
-    setSelected((s) => s.includes(t) ? s.filter(x => x !== t) : [...s, t]);
-
-  return (
-    <div className="grid lg:grid-cols-2 gap-6">
-      <Card className="p-6 border-border/60 shadow-card">
-        <h2 className="font-display font-semibold text-lg mb-4">Pick a date</h2>
-        <Calendar mode="single" selected={date} onSelect={setDate}
-          className={cn("p-3 pointer-events-auto rounded-lg border")} />
-      </Card>
-      <Card className="p-6 border-border/60 shadow-card">
-        <h2 className="font-display font-semibold text-lg mb-4">Time slots</h2>
-        <div className="grid grid-cols-2 gap-2">
-          {ALL_SLOTS.map((t) => {
-            const on = selected.includes(t);
-            return (
-              <Button key={t} variant={on ? "default" : "outline"}
-                className={cn(on && "bg-accent text-accent-foreground hover:bg-accent/90")}
-                onClick={() => toggle(t)}>
-                {on && <Check size={14} className="mr-1" />}{t}
-              </Button>
-            );
-          })}
-        </div>
-        <Button
-          onClick={() => toast.success(`${selected.length} slots added for ${date ? format(date, "PP") : ""}`)}
-          className="w-full mt-5 bg-accent text-accent-foreground">
-          <Plus size={16} className="mr-1" /> Add slots
-        </Button>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );
@@ -95,18 +91,58 @@ function Schedule() {
 
 // ── Bookings ──────────────────────────────────────────────────────────────────
 function Bookings() {
+  const [bookings, setBookings] = useState<UserBooking[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+
+  useEffect(() => {
+    paymentService.getMyCreatorBookings()
+      .then(({ bookings: b }) => setBookings(b))
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return (
+    <div className="flex items-center justify-center h-40 gap-2 text-muted-foreground">
+      <Loader2 className="animate-spin" size={18} />
+      <span className="text-sm">Loading bookings…</span>
+    </div>
+  );
+
+  if (error) return (
+    <Card className="p-10 flex flex-col items-center gap-3 text-center border-destructive/30">
+      <AlertCircle size={32} className="text-destructive" />
+      <p className="text-sm text-muted-foreground">{error}</p>
+      <Button variant="outline" onClick={() => window.location.reload()}>Retry</Button>
+    </Card>
+  );
+
+  if (bookings.length === 0) return (
+    <p className="text-sm text-muted-foreground py-10 text-center">No bookings yet.</p>
+  );
+
   return (
     <div className="space-y-3">
-      {creatorBookings.map((b) => (
-        <Card key={b.id} className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
+      {bookings.map((b) => (
+        <Card key={b._id} className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <div className="font-semibold">{b.creatorName}</div>
-            <div className="text-sm text-muted-foreground">{format(new Date(b.date), "PPP")} · {b.time}</div>
+            <div className="font-semibold">{b.userId?.name ?? "Client"}</div>
+            <div className="text-sm text-muted-foreground">
+              {b.date ? format(new Date(b.date), "PPP") : "Monthly plan"} · {b.time ?? "—"}
+            </div>
+            <span className="text-xs text-muted-foreground capitalize">{b.sessionType}</span>
           </div>
           <div className="flex items-center gap-3">
-            <span className="font-display font-bold">₹{b.price}</span>
-            {b.status === "upcoming"
-              ? <VideoCallButton label="Start Session" clientName={b.creatorName} />
+            <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
+            {(b.status === "upcoming" || b.status === "success")
+              ? (
+                // ✅ bookingId passed
+                <VideoCallButton
+                  label="Start Session"
+                  clientName={b.userId?.name ?? "Client"}
+                  bookingId={b._id}
+                />
+              )
               : <span className="text-sm px-3 py-1.5 rounded-md bg-success/10 text-success font-medium">Completed</span>}
           </div>
         </Card>
@@ -185,110 +221,6 @@ function EditablePrice({ label, subLabel, icon: Icon, value, onSave, min, prefix
   );
 }
 
-// ── Time Slot Manager (used inside Profile) ───────────────────────────────────
-function TimeSlotManager() {
-  const [selected,  setSelected]  = useState<string[]>([]);
-  const [loading,   setLoading]   = useState(true);
-  const [saving,    setSaving]    = useState(false);
-
-  // Load saved slots from backend on mount
-  useEffect(() => {
-    authService.getSlots()
-      .then(({ timeSlots }) => setSelected(timeSlots))
-      .catch(() => {/* silently keep empty */})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const toggle = (slot: string) =>
-    setSelected((prev) =>
-      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
-    );
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const { timeSlots } = await authService.saveSlots(selected);
-      setSelected(timeSlots);
-      toast.success(`${timeSlots.length} time slot${timeSlots.length !== 1 ? "s" : ""} saved`);
-    } catch (err) {
-      if (err instanceof APIError) toast.error(err.message);
-      else toast.error("Failed to save slots. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card className="p-6 border-border/60 shadow-card">
-      <div className="flex items-center justify-between mb-1">
-        <h2 className="font-display font-semibold text-lg">Available Time Slots</h2>
-        {selected.length > 0 && (
-          <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
-            {selected.length} selected
-          </span>
-        )}
-      </div>
-      <p className="text-sm text-muted-foreground mb-4">
-        Select the time slots when you're available for sessions. These will be shown to clients on your profile.
-      </p>
-
-      {loading ? (
-        <div className="flex items-center gap-2 text-muted-foreground py-6 justify-center">
-          <Loader2 className="animate-spin" size={16} />
-          <span className="text-sm">Loading saved slots…</span>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {ALL_SLOTS.map((slot) => {
-              const active = selected.includes(slot);
-              return (
-                <button
-                  key={slot}
-                  onClick={() => toggle(slot)}
-                  className={`px-2 py-2 rounded-lg text-xs font-medium border transition-colors text-center ${
-                    active
-                      ? "bg-accent text-accent-foreground border-accent"
-                      : "border-border text-muted-foreground hover:border-accent hover:text-accent"
-                  }`}
-                >
-                  {active && <Check size={10} className="inline mr-0.5 -mt-0.5" />}
-                  {slot}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="flex items-center gap-3 mt-5">
-            <Button
-              onClick={handleSave}
-              disabled={saving}
-              className="bg-accent text-accent-foreground"
-            >
-              {saving
-                ? <><Loader2 size={13} className="animate-spin mr-1.5" />Saving…</>
-                : <><Check size={14} className="mr-1.5" />Save slots</>}
-            </Button>
-            {selected.length > 0 && (
-              <Button
-                variant="outline"
-                onClick={() => setSelected([])}
-                disabled={saving}
-                className="text-muted-foreground"
-              >
-                Clear all
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground ml-auto">
-              {selected.length === 0 ? "No slots selected" : `${selected.length} of ${ALL_SLOTS.length} slots`}
-            </span>
-          </div>
-        </>
-      )}
-    </Card>
-  );
-}
-
 // ── Earnings ──────────────────────────────────────────────────────────────────
 function Earnings({
   pricing,
@@ -297,18 +229,32 @@ function Earnings({
   pricing: Pricing;
   onSaveField: (p: Pricing) => Promise<void>;
 }) {
+  const [bookings, setBookings] = useState<UserBooking[]>([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    paymentService.getMyCreatorBookings()
+      .then(({ bookings: b }) => setBookings(b))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   const { dailyPrice, monthlyPrice, monthlySessions } = pricing;
   const perSession  = monthlySessions > 0 ? Math.round(monthlyPrice / monthlySessions) : 0;
   const saves       = Math.max(0, dailyPrice * monthlySessions - monthlyPrice);
   const discountPct = dailyPrice * monthlySessions > 0
     ? Math.round((1 - monthlyPrice / (dailyPrice * monthlySessions)) * 100) : 0;
 
+  const totalRevenue  = bookings.reduce((sum, b) => sum + b.amount, 0);
+  const totalEarnings = bookings.reduce((sum, b) => sum + (b.amount - b.commission), 0);
+  const totalClients  = bookings.length;
+
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-3 gap-4">
-        <KpiCard label="Total earnings" value="₹84,200" icon={Wallet} />
-        <KpiCard label="This month"     value="₹18,400" icon={TrendingUp} trend="+12%" />
-        <KpiCard label="Available"      value="₹14,200" icon={Wallet} />
+        <KpiCard label="Total earnings" value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`} icon={Wallet} />
+        <KpiCard label="Total revenue"  value={loading ? "—" : `₹${totalRevenue.toLocaleString()}`}  icon={TrendingUp} />
+        <KpiCard label="Total clients"  value={loading ? "—" : String(totalClients)}                 icon={Users} />
       </div>
 
       <div>
@@ -317,26 +263,17 @@ function Earnings({
           <EditablePrice
             label="Daily Session"    subLabel="Per session charge"       icon={IndianRupee}
             value={dailyPrice}       min={100}
-            onSave={async (v) => {
-              await onSaveField({ ...pricing, dailyPrice: v });
-              toast.success("Daily price updated");
-            }}
+            onSave={async (v) => { await onSaveField({ ...pricing, dailyPrice: v }); toast.success("Daily price updated"); }}
           />
           <EditablePrice
             label="Monthly Package"  subLabel="Total monthly charge"     icon={CalIcon}
             value={monthlyPrice}     min={1000}
-            onSave={async (v) => {
-              await onSaveField({ ...pricing, monthlyPrice: v });
-              toast.success("Monthly price updated");
-            }}
+            onSave={async (v) => { await onSaveField({ ...pricing, monthlyPrice: v }); toast.success("Monthly price updated"); }}
           />
           <EditablePrice
             label="Sessions / Month" subLabel="Included in monthly plan" icon={Users}
             value={monthlySessions}  min={1}    prefix=""
-            onSave={async (v) => {
-              await onSaveField({ ...pricing, monthlySessions: v });
-              toast.success("Sessions per month updated");
-            }}
+            onSave={async (v) => { await onSaveField({ ...pricing, monthlySessions: v }); toast.success("Sessions per month updated"); }}
           />
         </div>
 
@@ -361,17 +298,116 @@ function Earnings({
       <Card className="p-6 border-border/60 shadow-card flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="font-display font-semibold text-lg">Withdraw earnings</h2>
-          <p className="text-sm text-muted-foreground">Transfer to your linked bank account (HDFC ••4521)</p>
+          <p className="text-sm text-muted-foreground">Transfer to your linked bank account</p>
         </div>
-        <Button onClick={() => toast.success("Withdrawal initiated — funds in 1-2 days")} className="bg-accent text-accent-foreground">
-          Withdraw ₹14,200
+        <Button
+          onClick={() => toast.success("Withdrawal initiated — funds in 1-2 days")}
+          className="bg-accent text-accent-foreground"
+          disabled={loading || totalEarnings === 0}
+        >
+          Withdraw {loading ? "…" : `₹${totalEarnings.toLocaleString()}`}
         </Button>
       </Card>
     </div>
   );
 }
 
-// ── Profile Image Upload Widget ───────────────────────────────────────────────
+// ── Time Slot Manager ─────────────────────────────────────────────────────────
+const ALL_SLOTS = [
+  "6:00 AM","7:00 AM","8:00 AM","9:00 AM","10:00 AM","11:00 AM",
+  "12:00 PM","1:00 PM","2:00 PM","3:00 PM","4:00 PM","5:00 PM",
+  "6:00 PM","7:00 PM","8:00 PM",
+];
+
+function TimeSlotManager() {
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
+
+  useEffect(() => {
+    authService.getSlots()
+      .then(({ timeSlots }) => setSelected(timeSlots))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const toggle = (slot: string) =>
+    setSelected((prev) =>
+      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
+    );
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const { timeSlots } = await authService.saveSlots(selected);
+      setSelected(timeSlots);
+      toast.success(`${timeSlots.length} time slot${timeSlots.length !== 1 ? "s" : ""} saved`);
+    } catch (err) {
+      if (err instanceof APIError) toast.error(err.message);
+      else toast.error("Failed to save slots.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-6 border-border/60 shadow-card">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="font-display font-semibold text-lg">Available Time Slots</h2>
+        {selected.length > 0 && (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
+            {selected.length} selected
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground mb-4">
+        Select your available slots. These are shown to clients on your profile.
+      </p>
+      {loading ? (
+        <div className="flex items-center gap-2 text-muted-foreground py-6 justify-center">
+          <Loader2 className="animate-spin" size={16} />
+          <span className="text-sm">Loading saved slots…</span>
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+            {ALL_SLOTS.map((slot) => {
+              const active = selected.includes(slot);
+              return (
+                <button key={slot} onClick={() => toggle(slot)}
+                  className={`px-2 py-2 rounded-lg text-xs font-medium border transition-colors text-center ${
+                    active
+                      ? "bg-accent text-accent-foreground border-accent"
+                      : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+                  }`}>
+                  {active && <Check size={10} className="inline mr-0.5 -mt-0.5" />}
+                  {slot}
+                </button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-3 mt-5">
+            <Button onClick={handleSave} disabled={saving} className="bg-accent text-accent-foreground">
+              {saving
+                ? <><Loader2 size={13} className="animate-spin mr-1.5" />Saving…</>
+                : <><Check size={14} className="mr-1.5" />Save slots</>}
+            </Button>
+            {selected.length > 0 && (
+              <Button variant="outline" onClick={() => setSelected([])} disabled={saving} className="text-muted-foreground">
+                Clear all
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              {selected.length === 0 ? "No slots selected" : `${selected.length} of ${ALL_SLOTS.length} slots`}
+            </span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── Profile Image Upload ──────────────────────────────────────────────────────
 function ProfileImageUpload({
   currentUrl, initials, onUploaded,
 }: {
@@ -396,7 +432,7 @@ function ProfileImageUpload({
     } catch (err) {
       setPreview(currentUrl);
       if (err instanceof APIError) toast.error(err.message);
-      else toast.error("Upload failed. Please try again.");
+      else toast.error("Upload failed.");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -435,7 +471,7 @@ function ProfileImageUpload({
       </div>
       <div className="space-y-2">
         <p className="text-sm font-medium">Profile photo</p>
-        <p className="text-xs text-muted-foreground">JPG, PNG or WebP · max 5 MB · auto-cropped to 400×400</p>
+        <p className="text-xs text-muted-foreground">JPG, PNG or WebP · max 5 MB</p>
         <div className="flex gap-2 mt-1">
           <Button type="button" size="sm" variant="outline" disabled={uploading}
             onClick={() => fileRef.current?.click()} className="gap-1.5">
@@ -474,9 +510,8 @@ function Profile({
 
   const [profileImageUrl, setProfileImageUrl] = useState(storedUser?.profileImage?.url || "");
   const [saving,          setSaving]          = useState(false);
-
-  const [isVerified,    setIsVerified]    = useState(storedUser?.creatorProfile?.verified ?? false);
-  const [verifyLoading, setVerifyLoading] = useState(true);
+  const [isVerified,      setIsVerified]      = useState(storedUser?.creatorProfile?.verified ?? false);
+  const [verifyLoading,   setVerifyLoading]   = useState(true);
 
   useEffect(() => {
     authService.getMe()
@@ -530,7 +565,7 @@ function Profile({
       toast.success("Profile saved successfully");
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
-      else toast.error("Failed to save profile. Please try again.");
+      else toast.error("Failed to save profile.");
     } finally {
       setSaving(false);
     }
@@ -538,26 +573,26 @@ function Profile({
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* Verification banner */}
-      {verifyLoading ? null : isVerified ? (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800">
-          <ShieldCheck size={20} className="text-green-600 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-green-700 dark:text-green-400">Account Verified</p>
-            <p className="text-xs text-green-600/80 dark:text-green-500">Your trainer profile has been verified by MyFit admin.</p>
+      {!verifyLoading && (
+        isVerified ? (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-50 border border-green-200 dark:bg-green-950/30 dark:border-green-800">
+            <ShieldCheck size={20} className="text-green-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-green-700 dark:text-green-400">Account Verified</p>
+              <p className="text-xs text-green-600/80">Your trainer profile has been verified by MyFit admin.</p>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
-          <Clock size={20} className="text-amber-600 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Verification Pending</p>
-            <p className="text-xs text-amber-600/80 dark:text-amber-500">Our team will review and verify your profile within 1–2 business days.</p>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800">
+            <Clock size={20} className="text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Verification Pending</p>
+              <p className="text-xs text-amber-600/80">Our team will review your profile within 1–2 business days.</p>
+            </div>
           </div>
-        </div>
+        )
       )}
 
-      {/* Avatar card */}
       <Card className="p-6 border-border/60 shadow-card">
         <ProfileImageUpload
           currentUrl={profileImageUrl}
@@ -568,7 +603,7 @@ function Profile({
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-display font-bold text-lg">{name || "—"}</p>
             {isVerified && (
-              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium dark:bg-green-900/40 dark:text-green-400">
+              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
                 <ShieldCheck size={11} /> Verified
               </span>
             )}
@@ -578,20 +613,17 @@ function Profile({
         </div>
       </Card>
 
-      {/* Profile form */}
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-5">Trainer profile</h2>
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label>Display name</Label>
-              <Input value={name} onChange={(e) => setName(e.target.value)}
-                className="mt-1.5" placeholder="Your name" />
+              <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1.5" placeholder="Your name" />
             </div>
             <div>
               <Label>Email</Label>
-              <Input type="email" value={storedUser?.email || ""} readOnly
-                className="mt-1.5 bg-muted/40 cursor-not-allowed" />
+              <Input type="email" value={storedUser?.email || ""} readOnly className="mt-1.5 bg-muted/40 cursor-not-allowed" />
             </div>
           </div>
 
@@ -602,15 +634,14 @@ function Profile({
                 <span className="inline-flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
                   {storedUser?.phone?.countryCode || "+91"}
                 </span>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)}
-                  placeholder="Phone number" className="flex-1" />
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Phone number" className="flex-1" />
               </div>
             </div>
             <div>
               <Label>Verified status</Label>
               <div className={`mt-1.5 h-10 px-3 flex items-center gap-2 rounded-md border text-sm font-medium
                 ${isVerified
-                  ? "border-green-200 bg-green-50 text-green-700 dark:bg-green-950/30 dark:border-green-800 dark:text-green-400"
+                  ? "border-green-200 bg-green-50 text-green-700"
                   : "border-input bg-muted/40 text-muted-foreground"}`}>
                 {verifyLoading
                   ? <><Loader2 size={13} className="animate-spin" /> Checking…</>
@@ -634,22 +665,19 @@ function Profile({
                 <Label>Daily session (₹)</Label>
                 <div className="relative mt-1.5">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                  <Input type="number" min={100} value={localDaily}
-                    onChange={(e) => setLocalDaily(e.target.value)} className="pl-7" />
+                  <Input type="number" min={100} value={localDaily} onChange={(e) => setLocalDaily(e.target.value)} className="pl-7" />
                 </div>
               </div>
               <div>
                 <Label>Monthly package (₹)</Label>
                 <div className="relative mt-1.5">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">₹</span>
-                  <Input type="number" min={1000} value={localMonthly}
-                    onChange={(e) => setLocalMonthly(e.target.value)} className="pl-7" />
+                  <Input type="number" min={1000} value={localMonthly} onChange={(e) => setLocalMonthly(e.target.value)} className="pl-7" />
                 </div>
               </div>
               <div>
                 <Label>Sessions / month</Label>
-                <Input type="number" min={1} className="mt-1.5" value={localSessions}
-                  onChange={(e) => setLocalSessions(e.target.value)} />
+                <Input type="number" min={1} className="mt-1.5" value={localSessions} onChange={(e) => setLocalSessions(e.target.value)} />
               </div>
             </div>
           </div>
@@ -677,7 +705,6 @@ function Profile({
         </form>
       </Card>
 
-      {/* ── Time Slot Manager — separate card below form ── */}
       <TimeSlotManager />
     </div>
   );
@@ -686,9 +713,7 @@ function Profile({
 // ── Routes ────────────────────────────────────────────────────────────────────
 export default function CreatorDashboardRoutes() {
   const [pricing, setPricingState] = useState<Pricing>({
-    dailyPrice:      800,
-    monthlyPrice:    12000,
-    monthlySessions: 20,
+    dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20,
   });
   const [pricingLoaded, setPricingLoaded] = useState(false);
 
@@ -722,10 +747,9 @@ export default function CreatorDashboardRoutes() {
   return (
     <Routes>
       <Route index           element={<Overview />} />
-      <Route path="schedule" element={<Schedule />} />
       <Route path="bookings" element={<Bookings />} />
-      <Route path="earnings" element={<Earnings   pricing={pricing} onSaveField={persistPricing} />} />
-      <Route path="profile"  element={<Profile    pricing={pricing} onSaveField={persistPricing} />} />
+      <Route path="earnings" element={<Earnings  pricing={pricing} onSaveField={persistPricing} />} />
+      <Route path="profile"  element={<Profile   pricing={pricing} onSaveField={persistPricing} />} />
     </Routes>
   );
 }

@@ -28,15 +28,16 @@ import { getSavedIds } from "@/lib/savedCreators";
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserBooking {
-  _id:         string;
-  creatorId:   { name: string; email: string } | null;
-  amount:      number;
-  commission:  number;
-  sessionType: string;
-  date?:       string | null;
-  time?:       string | null;
-  status:      string;
-  createdAt:   string;
+  _id:          string;
+  creatorId:    { name: string; email: string } | null;
+  amount:       number;
+  commission:   number;
+  sessionType:  string;
+  date?:        string | null;
+  time?:        string | null;
+  status:       string;
+  jitsiRoomId?: string | null;
+  createdAt:    string;
 }
 
 // ── Overview ──────────────────────────────────────────────────────────────────
@@ -53,7 +54,7 @@ function Overview() {
       .finally(() => setLoading(false));
   }, []);
 
-  const upcoming  = bookings.filter((b) => b.status === "upcoming"  || b.status === "success");
+  const upcoming  = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
   const completed = bookings.filter((b) => b.status === "completed");
 
   return (
@@ -83,7 +84,8 @@ function Overview() {
                     {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
                   </div>
                 </div>
-                <VideoCallButton label="Join" />
+                {/* ✅ bookingId passed */}
+                <VideoCallButton label="Join" bookingId={b._id} />
               </Card>
             ))}
           </div>
@@ -368,7 +370,7 @@ function MyBookings() {
       <div className="flex items-center gap-3">
         <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
         {(b.status === "upcoming" || b.status === "success")
-          ? <VideoCallButton label="Join Session" />
+          ? <VideoCallButton label="Join Session" bookingId={b._id} /> // ✅ fixed
           : <Button variant="outline">Leave Review</Button>}
       </div>
     </Card>

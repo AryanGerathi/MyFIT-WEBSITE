@@ -35,7 +35,6 @@ const userItems = [
 
 const creatorItems = [
   { title: "Dashboard", url: "/creator-dashboard",           icon: LayoutDashboard },
-  { title: "Schedule",  url: "/creator-dashboard/schedule",  icon: CalendarDays },
   { title: "Bookings",  url: "/creator-dashboard/bookings",  icon: ClipboardList },
   { title: "Earnings",  url: "/creator-dashboard/earnings",  icon: Wallet },
   { title: "Profile",   url: "/creator-dashboard/profile",   icon: User },

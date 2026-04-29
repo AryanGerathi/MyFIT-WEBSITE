@@ -26,12 +26,11 @@ const Payment = () => {
   const navigate  = useNavigate();
   const location  = useLocation();
 
-  const [draft,       setDraft]       = useState<any>(null);
-  const [processing,  setProcessing]  = useState(false);
-
-  const [roomUrl,     setRoomUrl]     = useState<string | null>(null);
-  const [bookingId,   setBookingId]   = useState<string | null>(null);
-  const [paid,        setPaid]        = useState(false);
+  const [draft,      setDraft]      = useState<any>(null);
+  const [processing, setProcessing] = useState(false);
+  const [roomUrl,    setRoomUrl]    = useState<string | null>(null);
+  const [bookingId,  setBookingId]  = useState<string | null>(null);
+  const [paid,       setPaid]       = useState(false);
 
   const inDashboard = location.pathname.startsWith("/dashboard");
 
@@ -53,8 +52,16 @@ const Payment = () => {
     );
   }
 
-  const platformFee = Math.round(draft.price * 0.02);
-  const total       = draft.price + platformFee;
+  // ── Commission model ────────────────────────────────────────────────────────
+  // draft.price  = base session price (e.g. ₹100)
+  // razorpayFee  = 2% shown to user on top   → ₹2
+  // total        = what user actually pays    → ₹102
+  // myCommission = 20% of base price          → ₹20  (stored in DB as commission)
+  // creatorGets  = base price - myCommission  → ₹80  (= draft.price - commission)
+  // ───────────────────────────────────────────────────────────────────────────
+  const razorpayFee  = Math.round(draft.price * 0.02);  // ₹2  — shown to user
+  const myCommission = Math.round(draft.price * 0.20);  // ₹20 — your earnings
+  const total        = draft.price + razorpayFee;        // ₹102 — user pays
 
   const pay = async () => {
     setProcessing(true);
@@ -117,12 +124,15 @@ const Payment = () => {
         razorpay_signature:  string;
       }) => {
         try {
-          // 4. Verify + save booking, backend returns jitsiRoomUrl
+          // 4. Verify + save booking
+          // amount     = ₹102 (full amount user paid — stored in DB)
+          // commission = ₹20  (your 20% cut — stored in DB)
+          // creator earnings = draft.price - commission = ₹100 - ₹20 = ₹80 ✅
           const data = await paymentService.verifyPayment({
             ...response,
             creatorId:   draft.creatorId,
-            amount:      total,
-            commission:  platformFee,
+            amount:      total,         // ₹102
+            commission:  myCommission,  // ₹20
             sessionType: draft.sessionType ?? "single",
             date:        draft.date  ?? null,
             time:        draft.time  ?? null,
@@ -130,7 +140,6 @@ const Payment = () => {
 
           sessionStorage.removeItem("myfit:booking");
 
-          // 5. Store room URL & booking ID from response
           setRoomUrl(data.jitsiRoomUrl   ?? null);
           setBookingId(data.booking?._id ?? null);
           setPaid(true);
@@ -167,17 +176,14 @@ const Payment = () => {
           </p>
         </div>
 
-        {/* ── After payment: show room link + navigation ── */}
+        {/* ── After payment ── */}
         {paid ? (
           <div className="rounded-xl border border-green-200 bg-green-50 p-5 space-y-4">
-            <p className="font-semibold text-green-800">
-              ✅ Booking confirmed!
-            </p>
+            <p className="font-semibold text-green-800">✅ Booking confirmed!</p>
             <p className="text-sm text-green-700">
               Your session room has been created. You can join now or find it
               anytime in your bookings.
             </p>
-
             <div className="flex flex-wrap gap-3">
               <VideoCallButton
                 label="Join Session Now"
@@ -241,11 +247,25 @@ const Payment = () => {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Platform fee (2%)</span>
-            <span>₹{platformFee}</span>
+            <span>₹{razorpayFee}</span>
           </div>
           <div className="flex justify-between font-display font-bold pt-3 border-t border-border/60">
             <span>Total</span>
             <span>₹{total}</span>
+          </div>
+        </div>
+
+        {/* ── Earnings breakdown ── */}
+        <div className="mt-4 pt-4 border-t border-border/60 space-y-1 text-xs text-muted-foreground">
+          <div className="flex justify-between">
+            <span>Creator receives</span>
+            <span className="text-foreground font-medium">
+              ₹{(draft.price - myCommission).toLocaleString()}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span>MyFit commission (20%)</span>
+            <span>₹{myCommission}</span>
           </div>
         </div>
       </Card>

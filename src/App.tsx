@@ -6,22 +6,23 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   LayoutDashboard, CalendarDays, Heart, User, Wallet, ClipboardList,
   Users, Briefcase, CreditCard, FileBarChart, CalendarCheck, Search,
+  ArrowDownToLine,
 } from "lucide-react";
 
-import { PublicLayout } from "@/components/PublicLayout";
+import { PublicLayout }    from "@/components/PublicLayout";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute }  from "@/components/ProtectedRoute";
 
-import Index from "./pages/Index.tsx";
-import Explore from "./pages/Explore.tsx";
-import CreatorProfile from "./pages/CreatorProfile.tsx";
-import Booking from "./pages/Booking.tsx";
-import Payment from "./pages/Payment.tsx";
-import Auth from "./pages/Auth.tsx";
-import UserDashboardRoutes from "./pages/dashboard/UserDashboard.tsx";
+import Index                  from "./pages/Index.tsx";
+import Explore                from "./pages/Explore.tsx";
+import CreatorProfile         from "./pages/CreatorProfile.tsx";
+import Booking                from "./pages/Booking.tsx";
+import Payment                from "./pages/Payment.tsx";
+import Auth                   from "./pages/Auth.tsx";
+import UserDashboardRoutes    from "./pages/dashboard/UserDashboard.tsx";
 import CreatorDashboardRoutes from "./pages/dashboard/CreatorDashboard.tsx";
-import AdminDashboardRoutes from "./pages/dashboard/AdminDashboard.tsx";
-import NotFound from "./pages/NotFound.tsx";
+import AdminDashboardRoutes   from "./pages/dashboard/AdminDashboard.tsx";
+import NotFound               from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
 
@@ -34,19 +35,20 @@ const userItems = [
 ];
 
 const creatorItems = [
-  { title: "Dashboard", url: "/creator-dashboard",           icon: LayoutDashboard },
-  { title: "Bookings",  url: "/creator-dashboard/bookings",  icon: ClipboardList },
-  { title: "Earnings",  url: "/creator-dashboard/earnings",  icon: Wallet },
-  { title: "Profile",   url: "/creator-dashboard/profile",   icon: User },
+  { title: "Dashboard", url: "/creator-dashboard",          icon: LayoutDashboard },
+  { title: "Bookings",  url: "/creator-dashboard/bookings", icon: ClipboardList },
+  { title: "Earnings",  url: "/creator-dashboard/earnings", icon: Wallet },
+  { title: "Profile",   url: "/creator-dashboard/profile",  icon: User },
 ];
 
 const adminItems = [
-  { title: "Overview", url: "/admin",          icon: LayoutDashboard },
-  { title: "Users",    url: "/admin/users",    icon: Users },
-  { title: "Creators", url: "/admin/creators", icon: Briefcase },
-  { title: "Payments", url: "/admin/payments", icon: CreditCard },
-  { title: "Bookings", url: "/admin/bookings", icon: CalendarCheck },
-  { title: "Reports",  url: "/admin/reports",  icon: FileBarChart },
+  { title: "Overview",     url: "/admin",              icon: LayoutDashboard  },
+  { title: "Users",        url: "/admin/users",        icon: Users            },
+  { title: "Creators",     url: "/admin/creators",     icon: Briefcase        },
+  { title: "Payments",     url: "/admin/payments",     icon: CreditCard       },
+  { title: "Bookings",     url: "/admin/bookings",     icon: CalendarCheck    },
+  { title: "Withdrawals",  url: "/admin/withdrawals",  icon: ArrowDownToLine  },
+  { title: "Reports",      url: "/admin/reports",      icon: FileBarChart     },
 ];
 
 const App = () => (
@@ -66,10 +68,10 @@ const App = () => (
           </Route>
 
           {/* Auth */}
-          <Route path="/login"  element={<Auth mode="login" />} />
+          <Route path="/login"  element={<Auth mode="login"  />} />
           <Route path="/signup" element={<Auth mode="signup" />} />
 
-          {/* User dashboard — protected */}
+          {/* User dashboard */}
           <Route element={
             <ProtectedRoute requiredRole="user">
               <DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />
@@ -78,7 +80,7 @@ const App = () => (
             <Route path="/dashboard/*" element={<UserDashboardRoutes />} />
           </Route>
 
-          {/* Creator dashboard — protected */}
+          {/* Creator dashboard */}
           <Route element={
             <ProtectedRoute requiredRole="creator">
               <DashboardLayout items={creatorItems} brandLabel="Creator" title="Creator Studio" />
@@ -87,7 +89,7 @@ const App = () => (
             <Route path="/creator-dashboard/*" element={<CreatorDashboardRoutes />} />
           </Route>
 
-          {/* Admin dashboard — protected */}
+          {/* Admin dashboard */}
           <Route element={
             <ProtectedRoute>
               <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />

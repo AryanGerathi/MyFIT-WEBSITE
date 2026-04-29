@@ -29,7 +29,6 @@ export interface Pricing {
   monthlySessions: number;
 }
 
-// ─── Public creator type ──────────────────────────────────────────────────────
 export interface PublicCreator {
   _id: string;
   name: string;
@@ -49,7 +48,6 @@ export interface PublicCreator {
   createdAt: string;
 }
 
-// ─── Admin types ──────────────────────────────────────────────────────────────
 export interface AdminCreator {
   _id: string;
   name: string;
@@ -88,6 +86,22 @@ export interface AdminPayment {
   createdAt:         string;
 }
 
+export interface AdminWithdrawal {
+  _id:       string;
+  creatorId: { name: string; email: string } | null;
+  amount:    number;
+  status:    "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
+// ── Creator's own withdrawal ──────────────────────────────────────────────────
+export interface MyWithdrawal {
+  _id:       string;
+  amount:    number;
+  status:    "pending" | "approved" | "rejected";
+  createdAt: string;
+}
+
 export interface UserBooking {
   _id:         string;
   creatorId:   { name: string; email: string } | null;
@@ -98,7 +112,7 @@ export interface UserBooking {
   date?:       string | null;
   time?:       string | null;
   status:      string;
-  jitsiRoomId?: string | null;    // ← add this
+  jitsiRoomId?: string | null;
   createdAt:   string;
 }
 
@@ -135,22 +149,15 @@ export interface UpdateProfilePayload {
   bio: string;
 }
 
-// ─── Payment types ────────────────────────────────────────────────────────────
-
 export interface CreateOrderResponse {
   success: true;
-  order: {
-    id: string;
-    amount: number;
-    currency: string;
-  };
+  order: { id: string; amount: number; currency: string };
 }
 
 export interface VerifyPaymentPayload {
   razorpay_order_id:   string;
   razorpay_payment_id: string;
   razorpay_signature:  string;
-  // booking metadata
   creatorId:   string;
   amount:      number;
   commission:  number;
@@ -163,81 +170,29 @@ export interface VerifyPaymentResponse {
   success: true;
   message: string;
   paymentId: string;
-  jitsiRoomUrl: string;           // ← add this
-  booking:      UserBooking;  
+  jitsiRoomUrl: string;
+  booking:      UserBooking;
 }
 
 // ─── API Response shapes ──────────────────────────────────────────────────────
 
-interface OTPStepResponse {
-  success: true;
-  message: string;
-  userId: string;
-}
-
-interface TokenResponse {
-  success: true;
-  token: string;
-  user: AuthUser;
-}
-
-interface SuccessResponse {
-  success: true;
-  message: string;
-}
-
-interface ImageUploadResponse {
-  success: true;
-  message: string;
-  imageUrl: string;
-  user: AuthUser;
-}
-
-interface PricingResponse {
-  success: true;
-  pricing: Pricing;
-}
-
-interface SlotsResponse {
-  success: true;
-  timeSlots: string[];
-}
-
-interface UpdateProfileResponse {
-  success: true;
-  user: AuthUser;
-}
-
-interface AdminCreatorsResponse {
-  success: true;
-  creators: AdminCreator[];
-}
-
-interface PublicCreatorsResponse {
-  success: true;
-  creators: PublicCreator[];
-}
-
-interface AdminUsersResponse {
-  success: true;
-  users: AdminUser[];
-}
-
-interface AdminPaymentsResponse {
-  success: true;
-  payments: AdminPayment[];
-}
-
-interface UserBookingsResponse {
-  success: true;
-  bookings: UserBooking[];
-}
-
-interface VerifyCreatorResponse {
-  success: true;
-  message: string;
-  user: AdminCreator;
-}
+interface OTPStepResponse        { success: true; message: string; userId: string; }
+interface TokenResponse          { success: true; token: string; user: AuthUser; }
+interface SuccessResponse        { success: true; message: string; }
+interface ImageUploadResponse    { success: true; message: string; imageUrl: string; user: AuthUser; }
+interface PricingResponse        { success: true; pricing: Pricing; }
+interface SlotsResponse          { success: true; timeSlots: string[]; }
+interface UpdateProfileResponse  { success: true; user: AuthUser; }
+interface AdminCreatorsResponse  { success: true; creators: AdminCreator[]; }
+interface PublicCreatorsResponse { success: true; creators: PublicCreator[]; }
+interface AdminUsersResponse     { success: true; users: AdminUser[]; }
+interface AdminPaymentsResponse  { success: true; payments: AdminPayment[]; }
+interface AdminWithdrawalsResponse  { success: true; withdrawals: AdminWithdrawal[]; }
+interface MyWithdrawalsResponse     { success: true; withdrawals: MyWithdrawal[]; }
+interface WithdrawalActionResponse  { success: true; message: string; withdrawal: AdminWithdrawal; }
+interface WithdrawalRequestResponse { success: true; message: string; }
+interface UserBookingsResponse      { success: true; bookings: UserBooking[]; }
+interface VerifyCreatorResponse     { success: true; message: string; user: AdminCreator; }
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -245,11 +200,7 @@ export class APIError extends Error {
   status: number;
   fieldErrors: { field: string; message: string }[];
 
-  constructor(
-    message: string,
-    status: number,
-    fieldErrors: { field: string; message: string }[] = []
-  ) {
+  constructor(message: string, status: number, fieldErrors: { field: string; message: string }[] = []) {
     super(message);
     this.name = "APIError";
     this.status = status;
@@ -259,12 +210,8 @@ export class APIError extends Error {
 
 // ─── Base fetch helper ────────────────────────────────────────────────────────
 
-async function apiFetch<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("myfit_token");
-
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20000);
 
@@ -301,13 +248,8 @@ async function apiFetch<T>(
   }
 
   const data = await res.json();
-
   if (!res.ok) {
-    throw new APIError(
-      data.message || "Something went wrong.",
-      res.status,
-      data.errors || []
-    );
+    throw new APIError(data.message || "Something went wrong.", res.status, data.errors || []);
   }
 
   return data as T;
@@ -317,66 +259,42 @@ async function apiFetch<T>(
 
 export const authService = {
   signup: (payload: SignupPayload) =>
-    apiFetch<OTPStepResponse>("/api/auth/signup", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<OTPStepResponse>("/api/auth/signup", { method: "POST", body: JSON.stringify(payload) }),
 
   login: (payload: LoginPayload) =>
-    apiFetch<OTPStepResponse>("/api/auth/login", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<OTPStepResponse>("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
 
   verifyOTP: (payload: VerifyOTPPayload) =>
-    apiFetch<TokenResponse>("/api/auth/verify-otp", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<TokenResponse>("/api/auth/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
 
   resendOTP: (payload: ResendOTPPayload) =>
-    apiFetch<SuccessResponse>("/api/auth/resend-otp", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<SuccessResponse>("/api/auth/resend-otp", { method: "POST", body: JSON.stringify(payload) }),
 
   getMe: () =>
     apiFetch<{ success: true; user: AuthUser }>("/api/auth/me"),
 
   updateProfile: (payload: UpdateProfilePayload) =>
-    apiFetch<UpdateProfileResponse>("/api/auth/update-profile", {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<UpdateProfileResponse>("/api/auth/update-profile", { method: "PUT", body: JSON.stringify(payload) }),
 
-  // ── Image upload (multipart — NOT JSON) ──────────────────────────────────
   uploadProfileImage: async (file: File): Promise<ImageUploadResponse> => {
     const token = localStorage.getItem("myfit_token");
     const formData = new FormData();
     formData.append("image", file);
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 20000);
-
     let res: Response;
     try {
       res = await fetch(`${API_URL}/api/upload/profile-image`, {
         method: "POST",
         signal: controller.signal,
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: formData,
       });
     } catch (err) {
       clearTimeout(timer);
       const isTimeout = (err as Error).name === "AbortError";
-      throw new APIError(
-        isTimeout ? "Upload timed out. Please try again." : "Upload failed. Check your connection.",
-        0
-      );
+      throw new APIError(isTimeout ? "Upload timed out. Please try again." : "Upload failed. Check your connection.", 0);
     }
-
     clearTimeout(timer);
     const data = await res.json();
     if (!res.ok) throw new APIError(data.message || "Upload failed.", res.status);
@@ -384,32 +302,20 @@ export const authService = {
   },
 
   deleteProfileImage: () =>
-    apiFetch<{ success: true; message: string; user: AuthUser }>(
-      "/api/upload/profile-image",
-      { method: "DELETE" }
-    ),
+    apiFetch<{ success: true; message: string; user: AuthUser }>("/api/upload/profile-image", { method: "DELETE" }),
 
-  // ── Pricing ───────────────────────────────────────────────────────────────
   getPricing: () =>
     apiFetch<PricingResponse>("/api/creator/pricing"),
 
   savePricing: (payload: Pricing) =>
-    apiFetch<PricingResponse>("/api/creator/pricing", {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
+    apiFetch<PricingResponse>("/api/creator/pricing", { method: "PUT", body: JSON.stringify(payload) }),
 
-  // ── Time Slots ────────────────────────────────────────────────────────────
   getSlots: () =>
     apiFetch<SlotsResponse>("/api/creator/slots"),
 
   saveSlots: (timeSlots: string[]) =>
-    apiFetch<SlotsResponse>("/api/creator/slots", {
-      method: "PUT",
-      body: JSON.stringify({ timeSlots }),
-    }),
+    apiFetch<SlotsResponse>("/api/creator/slots", { method: "PUT", body: JSON.stringify({ timeSlots }) }),
 
-  // ── Session helpers ───────────────────────────────────────────────────────
   saveSession: (token: string, user: AuthUser) => {
     localStorage.setItem("myfit_token", token);
     localStorage.setItem("myfit_user", JSON.stringify(user));
@@ -436,8 +342,7 @@ export const authService = {
 // ─── Admin Service ────────────────────────────────────────────────────────────
 
 export const adminService = {
-  getCreators: () =>
-    apiFetch<AdminCreatorsResponse>("/api/admin/creators"),
+  getCreators: () => apiFetch<AdminCreatorsResponse>("/api/admin/creators"),
 
   verifyCreator: (id: string, verified: boolean) =>
     apiFetch<VerifyCreatorResponse>(`/api/admin/creators/${id}/verify`, {
@@ -445,45 +350,52 @@ export const adminService = {
       body: JSON.stringify({ verified }),
     }),
 
-  getUsers: () =>
-    apiFetch<AdminUsersResponse>("/api/admin/users"),
+  getUsers: () => apiFetch<AdminUsersResponse>("/api/admin/users"),
 
-  getPayments: () =>
-    apiFetch<AdminPaymentsResponse>("/api/admin/payments"),
+  getPayments: () => apiFetch<AdminPaymentsResponse>("/api/admin/payments"),
+
+  getWithdrawals: () => apiFetch<AdminWithdrawalsResponse>("/api/admin/withdrawals"),
+
+  updateWithdrawal: (id: string, action: "approve" | "reject") =>
+    apiFetch<WithdrawalActionResponse>(`/api/admin/withdrawals/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    }),
 };
 
-// ─── Creator Service (public endpoints — no auth required) ───────────────────
+// ─── Creator Service ──────────────────────────────────────────────────────────
 
 export const creatorService = {
-  getVerifiedCreators: () =>
-    apiFetch<PublicCreatorsResponse>("/api/creator/public"),
+  getVerifiedCreators: () => apiFetch<PublicCreatorsResponse>("/api/creator/public"),
 };
 
 // ─── Payment Service ──────────────────────────────────────────────────────────
 
 export const paymentService = {
   createOrder: (amount: number) =>
-    apiFetch<CreateOrderResponse>("/api/payment/create-order", {
+    apiFetch<CreateOrderResponse>("/api/payment/create-order", { method: "POST", body: JSON.stringify({ amount }) }),
+
+  verifyPayment: (payload: VerifyPaymentPayload) =>
+    apiFetch<VerifyPaymentResponse>("/api/payment/verify", { method: "POST", body: JSON.stringify(payload) }),
+
+  getRoomUrl: (bookingId: string) =>
+    apiFetch<{ success: true; roomId: string; roomUrl: string }>(`/api/payment/booking/${bookingId}/room`),
+
+  requestWithdrawal: (amount: number) =>
+    apiFetch<WithdrawalRequestResponse>("/api/payment/withdrawal/request", {
       method: "POST",
       body: JSON.stringify({ amount }),
     }),
 
-  verifyPayment: (payload: VerifyPaymentPayload) =>
-    apiFetch<VerifyPaymentResponse>("/api/payment/verify", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }),
-    
-    getRoomUrl: (bookingId: string) =>
-      apiFetch<{ success: true; roomId: string; roomUrl: string }>(
-        `/api/payment/booking/${bookingId}/room`
-      ),
+  // ── NEW: fetch creator's own withdrawal history ────────────────────────────
+  getMyWithdrawals: () =>
+    apiFetch<MyWithdrawalsResponse>("/api/payment/my-withdrawals"),
 
-    getMyCreatorBookings: () =>
-      apiFetch<{ success: true; bookings: (UserBooking & { userId: { name: string; email: string } | null })[] }>(
-        "/api/payment/my-creator-bookings"
-      ),
+  getMyCreatorBookings: () =>
+    apiFetch<{ success: true; bookings: (UserBooking & { userId: { name: string; email: string } | null })[] }>(
+      "/api/payment/my-creator-bookings"
+    ),
 
-  getMyBookings: () =>                                        // ✅ added
+  getMyBookings: () =>
     apiFetch<UserBookingsResponse>("/api/payment/my-bookings"),
 };

@@ -32,7 +32,11 @@ function Overview() {
   }, []);
 
   const upcoming      = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
-  const totalEarnings = bookings.reduce((sum, b) => sum + (b.amount - b.commission), 0);
+  const totalEarnings = bookings.reduce((sum, b) => {
+    const basePrice  = Math.round(b.amount / 1.02);
+    const commission = Math.round(basePrice * 0.20);
+    return sum + (basePrice - commission);
+  }, 0);
 
   return (
     <div className="space-y-6">
@@ -74,7 +78,6 @@ function Overview() {
                     {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
                   </div>
                 </div>
-                {/* ✅ bookingId passed */}
                 <VideoCallButton
                   label="Start Session"
                   clientName={b.userId?.name ?? "Client"}
@@ -136,7 +139,6 @@ function Bookings() {
             <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
             {(b.status === "upcoming" || b.status === "success")
               ? (
-                // ✅ bookingId passed
                 <VideoCallButton
                   label="Start Session"
                   clientName={b.userId?.name ?? "Client"}
@@ -229,12 +231,22 @@ function Earnings({
   pricing: Pricing;
   onSaveField: (p: Pricing) => Promise<void>;
 }) {
-  const [bookings, setBookings] = useState<UserBooking[]>([]);
-  const [loading,  setLoading]  = useState(true);
+  const [bookings,         setBookings]         = useState<UserBooking[]>([]);
+  const [withdrawals,      setWithdrawals]       = useState<{ amount: number; status: string }[]>([]);
+  const [loading,          setLoading]          = useState(true);
+  const [withdrawing,      setWithdrawing]       = useState(false);
+  const [withdrawalStatus, setWithdrawalStatus]  = useState<"none" | "pending" | "approved" | "rejected">("none");
 
   useEffect(() => {
-    paymentService.getMyCreatorBookings()
-      .then(({ bookings: b }) => setBookings(b))
+    Promise.all([
+      paymentService.getMyCreatorBookings(),
+      paymentService.getMyWithdrawals(),
+    ])
+      .then(([{ bookings: b }, { withdrawals: w }]) => {
+        setBookings(b);
+        setWithdrawals(w);
+        if (w.length > 0) setWithdrawalStatus(w[0].status as "none" | "pending" | "approved" | "rejected");
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -245,16 +257,71 @@ function Earnings({
   const discountPct = dailyPrice * monthlySessions > 0
     ? Math.round((1 - monthlyPrice / (dailyPrice * monthlySessions)) * 100) : 0;
 
-  const totalRevenue  = bookings.reduce((sum, b) => sum + b.amount, 0);
-  const totalEarnings = bookings.reduce((sum, b) => sum + (b.amount - b.commission), 0);
-  const totalClients  = bookings.length;
+  const totalEarnings = bookings.reduce((sum, b) => {
+    const basePrice  = Math.round(b.amount / 1.02);
+    const commission = Math.round(basePrice * 0.20);
+    return sum + (basePrice - commission);
+  }, 0);
+
+  const withdrawnAmount = withdrawals
+    .filter((w) => w.status === "approved" || w.status === "pending")
+    .reduce((sum, w) => sum + w.amount, 0);
+
+  const availableForWithdrawal = Math.max(0, totalEarnings - withdrawnAmount);
+
+  const totalClients = bookings.length;
+
+  const handleWithdraw = async () => {
+    if (availableForWithdrawal === 0) return;
+    setWithdrawing(true);
+    try {
+      await paymentService.requestWithdrawal(availableForWithdrawal);
+      setWithdrawalStatus("pending");
+      toast.success("Withdrawal request sent to admin — you'll be notified once approved.");
+    } catch (err) {
+      if (err instanceof APIError) toast.error(err.message);
+      else toast.error("Failed to submit withdrawal request. Please try again.");
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const renderWithdrawAction = () => {
+    if (withdrawalStatus === "pending") {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
+          <Clock size={15} /> Pending approval
+        </div>
+      );
+    }
+    if (withdrawalStatus === "approved") {
+      return (
+        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
+          <ShieldCheck size={15} /> Approved — money will be in your account within a week
+        </div>
+      );
+    }
+    return (
+      <Button
+        onClick={handleWithdraw}
+        className="bg-accent text-accent-foreground"
+        disabled={loading || withdrawing || availableForWithdrawal === 0}
+      >
+        {withdrawing
+          ? <><Loader2 size={14} className="animate-spin mr-1.5" />Submitting…</>
+          : withdrawalStatus === "rejected"
+            ? `Re-request Withdrawal  ₹${loading ? "…" : availableForWithdrawal.toLocaleString()}`
+            : `Request Withdrawal  ₹${loading ? "…" : availableForWithdrawal.toLocaleString()}`}
+      </Button>
+    );
+  };
 
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-3 gap-4">
-        <KpiCard label="Total earnings" value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`} icon={Wallet} />
-        <KpiCard label="Total revenue"  value={loading ? "—" : `₹${totalRevenue.toLocaleString()}`}  icon={TrendingUp} />
-        <KpiCard label="Total clients"  value={loading ? "—" : String(totalClients)}                 icon={Users} />
+        <KpiCard label="Total earnings"       value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`}            icon={Wallet} />
+        <KpiCard label="Withdrawal available" value={loading ? "—" : `₹${availableForWithdrawal.toLocaleString()}`}   icon={Wallet} />
+        <KpiCard label="Total clients"        value={loading ? "—" : String(totalClients)}                            icon={Users}  />
       </div>
 
       <div>
@@ -295,18 +362,55 @@ function Earnings({
         </Card>
       </div>
 
+      {!loading && bookings.length > 0 && (
+        <Card className="border-border/60 shadow-card overflow-hidden">
+          <div className="p-5 border-b border-border/60">
+            <h2 className="font-display font-semibold">Earnings breakdown</h2>
+            <p className="text-sm text-muted-foreground">
+              MyFit retains a <span className="font-medium text-foreground">20% platform commission</span> on each booking. The remaining amount is credited to you.
+            </p>
+          </div>
+          <div className="divide-y divide-border/60">
+            {bookings.map((b) => {
+              const basePrice    = Math.round(b.amount / 1.02);
+              const commission   = Math.round(basePrice * 0.20);
+              const creatorEarns = basePrice - commission;
+              return (
+                <div key={b._id} className="px-5 py-4 flex items-center justify-between gap-4 flex-wrap text-sm">
+                  <div>
+                    <div className="font-medium">{b.userId?.name ?? "Client"}</div>
+                    <div className="text-xs text-muted-foreground capitalize">
+                      {b.sessionType} · {b.date ? format(new Date(b.date), "PP") : "Monthly plan"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6 text-xs text-muted-foreground">
+                    <div className="text-right">
+                      <p>MyFit commission (20%)</p>
+                      <p className="font-medium text-foreground">₹{commission.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p>You receive</p>
+                      <p className="font-display font-bold text-green-600 text-sm">₹{creatorEarns.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <Card className="p-6 border-border/60 shadow-card flex items-center justify-between flex-wrap gap-4">
         <div>
           <h2 className="font-display font-semibold text-lg">Withdraw earnings</h2>
-          <p className="text-sm text-muted-foreground">Transfer to your linked bank account</p>
+          <p className="text-sm text-muted-foreground">
+            {withdrawalStatus === "pending"  && "Your withdrawal request is pending admin approval."}
+            {withdrawalStatus === "approved" && "Your withdrawal has been approved. Amount will be credited within a week."}
+            {withdrawalStatus === "rejected" && "Your last withdrawal was rejected. You may re-submit a new request."}
+            {withdrawalStatus === "none"     && "Submit a withdrawal request — admin will review and transfer to your bank account."}
+          </p>
         </div>
-        <Button
-          onClick={() => toast.success("Withdrawal initiated — funds in 1-2 days")}
-          className="bg-accent text-accent-foreground"
-          disabled={loading || totalEarnings === 0}
-        >
-          Withdraw {loading ? "…" : `₹${totalEarnings.toLocaleString()}`}
-        </Button>
+        {renderWithdrawAction()}
       </Card>
     </div>
   );
@@ -713,23 +817,43 @@ function Profile({
 // ── Routes ────────────────────────────────────────────────────────────────────
 export default function CreatorDashboardRoutes() {
   const [pricing, setPricingState] = useState<Pricing>({
-    dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20,
+    // ── FIX: start with zeros so we never flash stale defaults
+    dailyPrice: 0, monthlyPrice: 0, monthlySessions: 0,
   });
   const [pricingLoaded, setPricingLoaded] = useState(false);
 
   useEffect(() => {
     authService.getPricing()
       .then(({ pricing: db }) => {
-        if (db && typeof db.dailyPrice === "number") setPricingState(db);
+        // ── FIX: coerce to Number so string values ("800") are handled correctly
+        //         and use nullish check instead of strict typeof guard
+        if (db && db.dailyPrice != null) {
+          setPricingState({
+            dailyPrice:      Number(db.dailyPrice),
+            monthlyPrice:    Number(db.monthlyPrice),
+            monthlySessions: Number(db.monthlySessions),
+          });
+        } else {
+          // ── FIX: fall back to sane defaults only if API returns nothing
+          setPricingState({ dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20 });
+        }
       })
-      .catch(() => {})
+      .catch(() => {
+        // ── FIX: on network error, fall back to defaults so UI isn't broken
+        setPricingState({ dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20 });
+      })
       .finally(() => setPricingLoaded(true));
   }, []);
 
   const persistPricing = useCallback(async (p: Pricing): Promise<void> => {
     const res = await authService.savePricing(p);
-    if (res?.pricing && typeof res.pricing.dailyPrice === "number") {
-      setPricingState(res.pricing);
+    // ── FIX: same Number() coercion on save response
+    if (res?.pricing && res.pricing.dailyPrice != null) {
+      setPricingState({
+        dailyPrice:      Number(res.pricing.dailyPrice),
+        monthlyPrice:    Number(res.pricing.monthlyPrice),
+        monthlySessions: Number(res.pricing.monthlySessions),
+      });
     } else {
       setPricingState(p);
     }

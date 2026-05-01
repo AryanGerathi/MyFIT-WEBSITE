@@ -19,8 +19,18 @@ export interface AuthUser {
     monthlyPrice?: number;
     monthlySessions?: number;
     timeSlots?: string[];
+    bankDetails?: BankDetails;
   };
   createdAt: string;
+}
+
+export interface BankDetails {
+  accountHolderName: string;
+  accountNumber:     string;
+  ifscCode:          string;
+  bankName:          string;
+  accountType:       "savings" | "current";
+  upiId?:            string;
 }
 
 export interface Pricing {
@@ -62,6 +72,7 @@ export interface AdminCreator {
     dailyPrice: number;
     monthlyPrice: number;
     monthlySessions: number;
+    bankDetails?: BankDetails;
   };
 }
 
@@ -94,7 +105,6 @@ export interface AdminWithdrawal {
   createdAt: string;
 }
 
-// ── Creator's own withdrawal ──────────────────────────────────────────────────
 export interface MyWithdrawal {
   _id:       string;
   amount:    number;
@@ -193,6 +203,7 @@ interface WithdrawalActionResponse  { success: true; message: string; withdrawal
 interface WithdrawalRequestResponse { success: true; message: string; }
 interface UserBookingsResponse      { success: true; bookings: UserBooking[]; }
 interface VerifyCreatorResponse     { success: true; message: string; user: AdminCreator; }
+interface BankDetailsResponse { success: true; message?: string; bankDetails: BankDetails | null; }
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -316,6 +327,16 @@ export const authService = {
   saveSlots: (timeSlots: string[]) =>
     apiFetch<SlotsResponse>("/api/creator/slots", { method: "PUT", body: JSON.stringify({ timeSlots }) }),
 
+  // ── Bank Details ────────────────────────────────────────────────────────────
+  getBankDetails: () =>
+    apiFetch<BankDetailsResponse>("/api/creator/bank-details"),
+
+  saveBankDetails: (payload: BankDetails) =>
+    apiFetch<BankDetailsResponse>("/api/creator/bank-details", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
   saveSession: (token: string, user: AuthUser) => {
     localStorage.setItem("myfit_token", token);
     localStorage.setItem("myfit_user", JSON.stringify(user));
@@ -387,7 +408,6 @@ export const paymentService = {
       body: JSON.stringify({ amount }),
     }),
 
-  // ── NEW: fetch creator's own withdrawal history ────────────────────────────
   getMyWithdrawals: () =>
     apiFetch<MyWithdrawalsResponse>("/api/payment/my-withdrawals"),
 

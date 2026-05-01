@@ -9,14 +9,15 @@ import { VideoCallButton } from "@/components/VideoCallButton";
 import {
   Wallet, Users, Calendar as CalIcon, TrendingUp,
   Check, IndianRupee, Pencil, Camera, Trash2, Loader2,
-  ShieldCheck, Clock, AlertCircle,
+  ShieldCheck, Clock, AlertCircle, XCircle, CheckCircle2, History,
+  Building2, CreditCard, BadgeCheck, Lock,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   authService, paymentService, APIError, Pricing,
-  type UserBooking,
+  type UserBooking, type MyWithdrawal, type BankDetails,
 } from "@/services/backendService";
 
 // ── Overview ──────────────────────────────────────────────────────────────────
@@ -41,23 +42,10 @@ function Overview() {
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard
-          label="Total earnings"
-          value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`}
-          icon={Wallet}
-          trend="+12% MoM"
-        />
-        <KpiCard
-          label="Total clients"
-          value={loading ? "—" : String(bookings.length)}
-          icon={Users}
-        />
-        <KpiCard
-          label="Upcoming sessions"
-          value={loading ? "—" : String(upcoming.length)}
-          icon={CalIcon}
-        />
-        <KpiCard label="Avg rating" value="4.9★" icon={TrendingUp} />
+        <KpiCard label="Total earnings"    value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`} icon={Wallet} trend="+12% MoM" />
+        <KpiCard label="Total clients"     value={loading ? "—" : String(bookings.length)}              icon={Users} />
+        <KpiCard label="Upcoming sessions" value={loading ? "—" : String(upcoming.length)}              icon={CalIcon} />
+        <KpiCard label="Avg rating"        value="4.9★"                                                 icon={TrendingUp} />
       </div>
 
       <Card className="p-6 border-border/60 shadow-card">
@@ -78,11 +66,7 @@ function Overview() {
                     {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
                   </div>
                 </div>
-                <VideoCallButton
-                  label="Start Session"
-                  clientName={b.userId?.name ?? "Client"}
-                  bookingId={b._id}
-                />
+                <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />
               </div>
             ))}
           </div>
@@ -138,13 +122,7 @@ function Bookings() {
           <div className="flex items-center gap-3">
             <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
             {(b.status === "upcoming" || b.status === "success")
-              ? (
-                <VideoCallButton
-                  label="Start Session"
-                  clientName={b.userId?.name ?? "Client"}
-                  bookingId={b._id}
-                />
-              )
+              ? <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />
               : <span className="text-sm px-3 py-1.5 rounded-md bg-success/10 text-success font-medium">Completed</span>}
           </div>
         </Card>
@@ -162,23 +140,17 @@ function EditablePrice({ label, subLabel, icon: Icon, value, onSave, min, prefix
   const [saving,  setSaving]  = useState(false);
   const [tmp, setTmp]         = useState(String(value));
 
-  useEffect(() => {
-    if (!editing) setTmp(String(value));
-  }, [value, editing]);
+  useEffect(() => { if (!editing) setTmp(String(value)); }, [value, editing]);
 
   const save = async () => {
     const v = Number(tmp);
     if (!v || v < min) { toast.error(`Minimum is ${prefix}${min}`); return; }
     setSaving(true);
-    try {
-      await onSave(v);
-      setEditing(false);
-    } catch (err) {
+    try { await onSave(v); setEditing(false); }
+    catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Failed to save. Please try again.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -223,21 +195,35 @@ function EditablePrice({ label, subLabel, icon: Icon, value, onSave, min, prefix
   );
 }
 
-// ── Earnings ──────────────────────────────────────────────────────────────────
-function Earnings({
-  pricing,
-  onSaveField,
-}: {
-  pricing: Pricing;
-  onSaveField: (p: Pricing) => Promise<void>;
-}) {
-  const [bookings,         setBookings]         = useState<UserBooking[]>([]);
-  const [withdrawals,      setWithdrawals]       = useState<{ amount: number; status: string }[]>([]);
-  const [loading,          setLoading]          = useState(true);
-  const [withdrawing,      setWithdrawing]       = useState(false);
-  const [withdrawalStatus, setWithdrawalStatus]  = useState<"none" | "pending" | "approved" | "rejected">("none");
+// ── Withdrawal Status Badge ───────────────────────────────────────────────────
+function WithdrawalBadge({ status }: { status: string }) {
+  if (status === "pending") return (
+    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 font-medium">
+      <Clock size={11} /> Pending
+    </span>
+  );
+  if (status === "approved") return (
+    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 font-medium">
+      <CheckCircle2 size={11} /> Approved
+    </span>
+  );
+  if (status === "rejected") return (
+    <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-700 font-medium">
+      <XCircle size={11} /> Rejected
+    </span>
+  );
+  return null;
+}
 
-  useEffect(() => {
+// ── Earnings ──────────────────────────────────────────────────────────────────
+function Earnings({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: Pricing) => Promise<void>; }) {
+  const [bookings,    setBookings]    = useState<UserBooking[]>([]);
+  const [withdrawals, setWithdrawals] = useState<MyWithdrawal[]>([]);
+  const [loading,     setLoading]     = useState(true);
+  const [withdrawing, setWithdrawing] = useState(false);
+
+  const fetchData = useCallback(() => {
+    setLoading(true);
     Promise.all([
       paymentService.getMyCreatorBookings(),
       paymentService.getMyWithdrawals(),
@@ -245,11 +231,12 @@ function Earnings({
       .then(([{ bookings: b }, { withdrawals: w }]) => {
         setBookings(b);
         setWithdrawals(w);
-        if (w.length > 0) setWithdrawalStatus(w[0].status as "none" | "pending" | "approved" | "rejected");
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const { dailyPrice, monthlyPrice, monthlySessions } = pricing;
   const perSession  = monthlySessions > 0 ? Math.round(monthlyPrice / monthlySessions) : 0;
@@ -266,80 +253,49 @@ function Earnings({
   const withdrawnAmount = withdrawals
     .filter((w) => w.status === "approved" || w.status === "pending")
     .reduce((sum, w) => sum + w.amount, 0);
-
   const availableForWithdrawal = Math.max(0, totalEarnings - withdrawnAmount);
 
-  const totalClients = bookings.length;
+  const latestWithdrawal = withdrawals.length > 0 ? withdrawals[0] : null;
+  const hasPending       = latestWithdrawal?.status === "pending";
+  const canRequest       = availableForWithdrawal > 0 && !hasPending;
 
   const handleWithdraw = async () => {
-    if (availableForWithdrawal === 0) return;
+    if (!canRequest) return;
     setWithdrawing(true);
     try {
       await paymentService.requestWithdrawal(availableForWithdrawal);
-      setWithdrawalStatus("pending");
-      toast.success("Withdrawal request sent to admin — you'll be notified once approved.");
+      toast.success("Withdrawal request submitted — admin will review shortly.");
+      fetchData();
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Failed to submit withdrawal request. Please try again.");
-    } finally {
-      setWithdrawing(false);
-    }
-  };
-
-  const renderWithdrawAction = () => {
-    if (withdrawalStatus === "pending") {
-      return (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium">
-          <Clock size={15} /> Pending approval
-        </div>
-      );
-    }
-    if (withdrawalStatus === "approved") {
-      return (
-        <div className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-medium">
-          <ShieldCheck size={15} /> Approved — money will be in your account within a week
-        </div>
-      );
-    }
-    return (
-      <Button
-        onClick={handleWithdraw}
-        className="bg-accent text-accent-foreground"
-        disabled={loading || withdrawing || availableForWithdrawal === 0}
-      >
-        {withdrawing
-          ? <><Loader2 size={14} className="animate-spin mr-1.5" />Submitting…</>
-          : withdrawalStatus === "rejected"
-            ? `Re-request Withdrawal  ₹${loading ? "…" : availableForWithdrawal.toLocaleString()}`
-            : `Request Withdrawal  ₹${loading ? "…" : availableForWithdrawal.toLocaleString()}`}
-      </Button>
-    );
+    } finally { setWithdrawing(false); }
   };
 
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-3 gap-4">
-        <KpiCard label="Total earnings"       value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`}            icon={Wallet} />
-        <KpiCard label="Withdrawal available" value={loading ? "—" : `₹${availableForWithdrawal.toLocaleString()}`}   icon={Wallet} />
-        <KpiCard label="Total clients"        value={loading ? "—" : String(totalClients)}                            icon={Users}  />
+        <KpiCard label="Total earnings"        value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`}           icon={Wallet} />
+        <KpiCard label="Available to withdraw" value={loading ? "—" : `₹${availableForWithdrawal.toLocaleString()}`}  icon={Wallet} />
+        <KpiCard label="Total clients"         value={loading ? "—" : String(bookings.length)}                        icon={Users}  />
       </div>
 
       <div>
         <h2 className="font-display font-semibold text-lg mb-3">Session Charges</h2>
         <div className="grid sm:grid-cols-3 gap-4">
           <EditablePrice
-            label="Daily Session"    subLabel="Per session charge"       icon={IndianRupee}
-            value={dailyPrice}       min={100}
+            label="Daily Session" subLabel="Per session charge" icon={IndianRupee}
+            value={dailyPrice} min={100}
             onSave={async (v) => { await onSaveField({ ...pricing, dailyPrice: v }); toast.success("Daily price updated"); }}
           />
           <EditablePrice
-            label="Monthly Package"  subLabel="Total monthly charge"     icon={CalIcon}
-            value={monthlyPrice}     min={1000}
+            label="Monthly Package" subLabel="Total monthly charge" icon={CalIcon}
+            value={monthlyPrice} min={1000}
             onSave={async (v) => { await onSaveField({ ...pricing, monthlyPrice: v }); toast.success("Monthly price updated"); }}
           />
           <EditablePrice
             label="Sessions / Month" subLabel="Included in monthly plan" icon={Users}
-            value={monthlySessions}  min={1}    prefix=""
+            value={monthlySessions} min={1} prefix=""
             onSave={async (v) => { await onSaveField({ ...pricing, monthlySessions: v }); toast.success("Sessions per month updated"); }}
           />
         </div>
@@ -367,7 +323,7 @@ function Earnings({
           <div className="p-5 border-b border-border/60">
             <h2 className="font-display font-semibold">Earnings breakdown</h2>
             <p className="text-sm text-muted-foreground">
-              MyFit retains a <span className="font-medium text-foreground">20% platform commission</span> on each booking. The remaining amount is credited to you.
+              MyFit retains a <span className="font-medium text-foreground">20% platform commission</span> on each booking.
             </p>
           </div>
           <div className="divide-y divide-border/60">
@@ -400,17 +356,77 @@ function Earnings({
         </Card>
       )}
 
-      <Card className="p-6 border-border/60 shadow-card flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h2 className="font-display font-semibold text-lg">Withdraw earnings</h2>
-          <p className="text-sm text-muted-foreground">
-            {withdrawalStatus === "pending"  && "Your withdrawal request is pending admin approval."}
-            {withdrawalStatus === "approved" && "Your withdrawal has been approved. Amount will be credited within a week."}
-            {withdrawalStatus === "rejected" && "Your last withdrawal was rejected. You may re-submit a new request."}
-            {withdrawalStatus === "none"     && "Submit a withdrawal request — admin will review and transfer to your bank account."}
-          </p>
+      <Card className="border-border/60 shadow-card overflow-hidden">
+        <div className="p-5 border-b border-border/60 flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <h2 className="font-display font-semibold text-lg flex items-center gap-2">
+              <History size={18} className="text-accent" /> Withdrawal Requests
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {hasPending
+                ? "A request is pending admin approval. You can submit another once it's resolved."
+                : availableForWithdrawal > 0
+                  ? `₹${availableForWithdrawal.toLocaleString()} is ready to withdraw.`
+                  : "No balance available to withdraw right now."}
+            </p>
+          </div>
+          {hasPending ? (
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium shrink-0">
+              <Clock size={14} /> Pending approval
+            </div>
+          ) : (
+            <Button
+              onClick={handleWithdraw}
+              className="bg-accent text-accent-foreground shrink-0"
+              disabled={loading || withdrawing || !canRequest}
+            >
+              {withdrawing
+                ? <><Loader2 size={14} className="animate-spin mr-1.5" />Submitting…</>
+                : `Request Withdrawal  ₹${loading ? "…" : availableForWithdrawal.toLocaleString()}`}
+            </Button>
+          )}
         </div>
-        {renderWithdrawAction()}
+
+        {loading ? (
+          <div className="flex items-center gap-2 p-6 text-muted-foreground text-sm">
+            <Loader2 className="animate-spin" size={15} /> Loading history…
+          </div>
+        ) : withdrawals.length === 0 ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">No withdrawal requests yet.</div>
+        ) : (
+          <>
+            <div className="px-5 py-2.5 grid grid-cols-3 text-xs font-medium text-muted-foreground bg-muted/30 border-b border-border/40">
+              <span>Date &amp; Time</span>
+              <span className="text-center">Amount</span>
+              <span className="text-right">Status</span>
+            </div>
+            <div className="divide-y divide-border/60">
+              {withdrawals.map((w) => (
+                <div key={w._id} className="px-5 py-4 grid grid-cols-3 items-center text-sm">
+                  <div>
+                    <p className="font-medium">{format(new Date(w.createdAt), "PP")}</p>
+                    <p className="text-xs text-muted-foreground">{format(new Date(w.createdAt), "p")}</p>
+                  </div>
+                  <div className="text-center">
+                    <span className="font-display font-bold text-base">₹{w.amount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-end">
+                    <WithdrawalBadge status={w.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-3 border-t border-border/60 bg-muted/20 flex items-center justify-between text-xs text-muted-foreground flex-wrap gap-2">
+              <span>{withdrawals.length} request{withdrawals.length !== 1 ? "s" : ""} total</span>
+              <span>
+                Total approved: ₹{withdrawals
+                  .filter((w) => w.status === "approved")
+                  .reduce((s, w) => s + w.amount, 0)
+                  .toLocaleString()}
+              </span>
+            </div>
+          </>
+        )}
       </Card>
     </div>
   );
@@ -436,9 +452,7 @@ function TimeSlotManager() {
   }, []);
 
   const toggle = (slot: string) =>
-    setSelected((prev) =>
-      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]
-    );
+    setSelected((prev) => prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -449,9 +463,7 @@ function TimeSlotManager() {
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Failed to save slots.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -464,9 +476,7 @@ function TimeSlotManager() {
           </span>
         )}
       </div>
-      <p className="text-sm text-muted-foreground mb-4">
-        Select your available slots. These are shown to clients on your profile.
-      </p>
+      <p className="text-sm text-muted-foreground mb-4">Select your available slots. These are shown to clients on your profile.</p>
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground py-6 justify-center">
           <Loader2 className="animate-spin" size={16} />
@@ -480,9 +490,7 @@ function TimeSlotManager() {
               return (
                 <button key={slot} onClick={() => toggle(slot)}
                   className={`px-2 py-2 rounded-lg text-xs font-medium border transition-colors text-center ${
-                    active
-                      ? "bg-accent text-accent-foreground border-accent"
-                      : "border-border text-muted-foreground hover:border-accent hover:text-accent"
+                    active ? "bg-accent text-accent-foreground border-accent" : "border-border text-muted-foreground hover:border-accent hover:text-accent"
                   }`}>
                   {active && <Check size={10} className="inline mr-0.5 -mt-0.5" />}
                   {slot}
@@ -492,14 +500,10 @@ function TimeSlotManager() {
           </div>
           <div className="flex items-center gap-3 mt-5">
             <Button onClick={handleSave} disabled={saving} className="bg-accent text-accent-foreground">
-              {saving
-                ? <><Loader2 size={13} className="animate-spin mr-1.5" />Saving…</>
-                : <><Check size={14} className="mr-1.5" />Save slots</>}
+              {saving ? <><Loader2 size={13} className="animate-spin mr-1.5" />Saving…</> : <><Check size={14} className="mr-1.5" />Save slots</>}
             </Button>
             {selected.length > 0 && (
-              <Button variant="outline" onClick={() => setSelected([])} disabled={saving} className="text-muted-foreground">
-                Clear all
-              </Button>
+              <Button variant="outline" onClick={() => setSelected([])} disabled={saving} className="text-muted-foreground">Clear all</Button>
             )}
             <span className="text-xs text-muted-foreground ml-auto">
               {selected.length === 0 ? "No slots selected" : `${selected.length} of ${ALL_SLOTS.length} slots`}
@@ -511,10 +515,220 @@ function TimeSlotManager() {
   );
 }
 
+// ── Bank Details Manager ──────────────────────────────────────────────────────
+// ── Bank Details Manager ──────────────────────────────────────────────────────
+const EMPTY_BANK: BankDetails = {
+  accountHolderName: "",
+  accountNumber:     "",
+  ifscCode:          "",
+  bankName:          "",
+  accountType:       "savings",
+  upiId:             "",
+};
+
+function BankDetailsManager() {
+  const [form,    setForm]    = useState<BankDetails>(EMPTY_BANK);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [saved,   setSaved]   = useState(false);
+
+  useEffect(() => {
+    authService.getBankDetails()
+      .then((res) => {
+        const bd = res?.bankDetails;
+        if (
+          bd &&
+          typeof bd === "object" &&
+          bd.accountNumber &&
+          bd.accountHolderName
+        ) {
+          setForm({
+            accountHolderName: bd.accountHolderName ?? "",
+            accountNumber:     bd.accountNumber     ?? "",
+            ifscCode:          bd.ifscCode          ?? "",
+            bankName:          bd.bankName          ?? "",
+            accountType:       bd.accountType === "current" ? "current" : "savings",
+            upiId:             bd.upiId             ?? "",
+          });
+          setSaved(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  const set = (key: keyof BankDetails, value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.accountHolderName.trim()) { toast.error("Account holder name is required"); return; }
+    if (!form.accountNumber.trim())     { toast.error("Account number is required");       return; }
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(form.ifscCode.trim())) {
+      toast.error("Enter a valid IFSC code (e.g. SBIN0001234)"); return;
+    }
+    if (!form.bankName.trim()) { toast.error("Bank name is required"); return; }
+
+    setSaving(true);
+    try {
+      const res = await authService.saveBankDetails({
+        accountHolderName: form.accountHolderName.trim(),
+        accountNumber:     form.accountNumber.trim(),
+        ifscCode:          form.ifscCode.trim().toUpperCase(),
+        bankName:          form.bankName.trim(),
+        accountType:       form.accountType,
+        upiId:             form.upiId?.trim() || undefined,
+      });
+
+      const bd = res?.bankDetails;
+      if (bd) {
+        setForm({
+          accountHolderName: bd.accountHolderName ?? "",
+          accountNumber:     bd.accountNumber     ?? "",
+          ifscCode:          bd.ifscCode          ?? "",
+          bankName:          bd.bankName          ?? "",
+          accountType:       bd.accountType === "current" ? "current" : "savings",
+          upiId:             bd.upiId             ?? "",
+        });
+      }
+      setSaved(true);
+      toast.success("Bank details saved successfully");
+    } catch (err) {
+      if (err instanceof APIError) toast.error(err.message);
+      else toast.error("Failed to save bank details.");
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Card className="p-6 border-border/60 shadow-card">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4 mb-5">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+            <Building2 size={20} className="text-accent" />
+          </div>
+          <div>
+            <h2 className="font-display font-semibold text-lg">Bank Details</h2>
+            <p className="text-sm text-muted-foreground">Used for processing withdrawal payments to your account.</p>
+          </div>
+        </div>
+        {saved && (
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700 font-medium shrink-0">
+            <BadgeCheck size={12} /> Saved
+          </span>
+        )}
+      </div>
+
+      {/* Security notice */}
+      <div className="flex items-center gap-2 px-3 py-2.5 mb-5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs">
+        <Lock size={13} className="shrink-0" />
+        Your bank details are encrypted and only used for processing withdrawals. They are never shared with clients.
+      </div>
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-muted-foreground py-8 justify-center">
+          <Loader2 className="animate-spin" size={16} />
+          <span className="text-sm">Loading bank details…</span>
+        </div>
+      ) : (
+        <form onSubmit={handleSave} className="space-y-4">
+          {/* Row 1 */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="bank-holder">Account Holder Name</Label>
+              <Input
+                id="bank-holder"
+                value={form.accountHolderName}
+                onChange={(e) => set("accountHolderName", e.target.value)}
+                placeholder="As per bank records"
+                className="mt-1.5"
+              />
+            </div>
+            <div>
+              <Label htmlFor="bank-name">Bank Name</Label>
+              <Input
+                id="bank-name"
+                value={form.bankName}
+                onChange={(e) => set("bankName", e.target.value)}
+                placeholder="e.g. State Bank of India"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+
+          {/* Row 2 */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="bank-account">Account Number</Label>
+              <div className="relative mt-1.5">
+                <CreditCard size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="bank-account"
+                  value={form.accountNumber}
+                  onChange={(e) => set("accountNumber", e.target.value.replace(/\D/g, ""))}
+                  placeholder="Enter account number"
+                  className="pl-9"
+                  maxLength={18}
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="bank-ifsc">IFSC Code</Label>
+              <Input
+                id="bank-ifsc"
+                value={form.ifscCode}
+                onChange={(e) => set("ifscCode", e.target.value.toUpperCase())}
+                placeholder="e.g. SBIN0001234"
+                className="mt-1.5 font-mono tracking-wider"
+                maxLength={11}
+              />
+            </div>
+          </div>
+
+          {/* Row 3 */}
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="bank-type">Account Type</Label>
+              <select
+                id="bank-type"
+                value={form.accountType}
+                onChange={(e) => set("accountType", e.target.value as "savings" | "current")}
+                className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="savings">Savings</option>
+                <option value="current">Current</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="bank-upi">
+                UPI ID <span className="text-muted-foreground font-normal">(optional)</span>
+              </Label>
+              <Input
+                id="bank-upi"
+                value={form.upiId ?? ""}
+                onChange={(e) => set("upiId", e.target.value)}
+                placeholder="yourname@upi"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <Button type="submit" disabled={saving} className="bg-accent text-accent-foreground">
+              {saving
+                ? <><Loader2 size={14} className="animate-spin mr-1.5" />Saving…</>
+                : <><Check size={14} className="mr-1.5" />{saved ? "Update bank details" : "Save bank details"}</>}
+            </Button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 // ── Profile Image Upload ──────────────────────────────────────────────────────
-function ProfileImageUpload({
-  currentUrl, initials, onUploaded,
-}: {
+function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
   currentUrl: string; initials: string; onUploaded: (url: string) => void;
 }) {
   const fileRef                   = useRef<HTMLInputElement>(null);
@@ -554,9 +768,7 @@ function ProfileImageUpload({
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Could not remove photo.");
-    } finally {
-      setDeleting(false);
-    }
+    } finally { setDeleting(false); }
   };
 
   return (
@@ -584,8 +796,7 @@ function ProfileImageUpload({
               : <><Camera size={13} />{preview ? "Change photo" : "Upload photo"}</>}
           </Button>
           {preview && (
-            <Button type="button" size="sm" variant="outline" disabled={deleting}
-              onClick={handleDelete}
+            <Button type="button" size="sm" variant="outline" disabled={deleting} onClick={handleDelete}
               className="gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive">
               {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
               Remove
@@ -593,20 +804,13 @@ function ProfileImageUpload({
           )}
         </div>
       </div>
-      <input ref={fileRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp"
-        className="hidden" onChange={handleFileChange} />
+      <input ref={fileRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
     </div>
   );
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
-function Profile({
-  pricing,
-  onSaveField,
-}: {
-  pricing: Pricing;
-  onSaveField: (p: Pricing) => Promise<void>;
-}) {
+function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: Pricing) => Promise<void>; }) {
   const storedUser = authService.getStoredUser();
   const initials   = storedUser?.name
     ? storedUser.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
@@ -619,10 +823,7 @@ function Profile({
 
   useEffect(() => {
     authService.getMe()
-      .then(({ user }) => {
-        setIsVerified(user.creatorProfile?.verified ?? false);
-        authService.updateStoredUser(user);
-      })
+      .then(({ user }) => { setIsVerified(user.creatorProfile?.verified ?? false); authService.updateStoredUser(user); })
       .catch(() => {})
       .finally(() => setVerifyLoading(false));
   }, []);
@@ -647,22 +848,14 @@ function Profile({
     const d = Number(localDaily);
     const m = Number(localMonthly);
     const s = Number(localSessions);
-
     if (!name.trim())   { toast.error("Name is required");                      return; }
     if (!d || d < 100)  { toast.error("Daily price minimum is ₹100");           return; }
     if (!m || m < 1000) { toast.error("Monthly price minimum is ₹1,000");       return; }
     if (!s || s < 1)    { toast.error("Sessions per month must be at least 1"); return; }
-
     setSaving(true);
     try {
       const [updatedUser] = await Promise.all([
-        authService.updateProfile({
-          name: name.trim(),
-          phone,
-          countryCode: storedUser?.phone?.countryCode || "+91",
-          specialization,
-          bio,
-        }),
+        authService.updateProfile({ name: name.trim(), phone, countryCode: storedUser?.phone?.countryCode || "+91", specialization, bio }),
         onSaveField({ dailyPrice: d, monthlyPrice: m, monthlySessions: s }),
       ]);
       authService.updateStoredUser(updatedUser.user);
@@ -670,9 +863,7 @@ function Profile({
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Failed to save profile.");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
@@ -698,11 +889,7 @@ function Profile({
       )}
 
       <Card className="p-6 border-border/60 shadow-card">
-        <ProfileImageUpload
-          currentUrl={profileImageUrl}
-          initials={initials}
-          onUploaded={(url) => setProfileImageUrl(url)}
-        />
+        <ProfileImageUpload currentUrl={profileImageUrl} initials={initials} onUploaded={(url) => setProfileImageUrl(url)} />
         <div className="mt-4 pt-4 border-t border-border/60">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-display font-bold text-lg">{name || "—"}</p>
@@ -730,7 +917,6 @@ function Profile({
               <Input type="email" value={storedUser?.email || ""} readOnly className="mt-1.5 bg-muted/40 cursor-not-allowed" />
             </div>
           </div>
-
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label>Mobile number</Label>
@@ -744,24 +930,17 @@ function Profile({
             <div>
               <Label>Verified status</Label>
               <div className={`mt-1.5 h-10 px-3 flex items-center gap-2 rounded-md border text-sm font-medium
-                ${isVerified
-                  ? "border-green-200 bg-green-50 text-green-700"
-                  : "border-input bg-muted/40 text-muted-foreground"}`}>
+                ${isVerified ? "border-green-200 bg-green-50 text-green-700" : "border-input bg-muted/40 text-muted-foreground"}`}>
                 {verifyLoading
                   ? <><Loader2 size={13} className="animate-spin" /> Checking…</>
-                  : isVerified
-                    ? <><ShieldCheck size={14} /> Verified</>
-                    : <><Clock size={14} /> Pending verification</>}
+                  : isVerified ? <><ShieldCheck size={14} /> Verified</> : <><Clock size={14} /> Pending verification</>}
               </div>
             </div>
           </div>
-
           <div>
             <Label>Specialty</Label>
-            <Input value={specialization} onChange={(e) => setSpecialization(e.target.value)}
-              placeholder="e.g. Strength & Muscle Gain" className="mt-1.5" />
+            <Input value={specialization} onChange={(e) => setSpecialization(e.target.value)} placeholder="e.g. Strength & Muscle Gain" className="mt-1.5" />
           </div>
-
           <div className="rounded-xl border border-border/60 p-4 space-y-4 bg-muted/20">
             <p className="font-semibold text-sm">Pricing</p>
             <div className="grid sm:grid-cols-3 gap-4">
@@ -785,24 +964,19 @@ function Profile({
               </div>
             </div>
           </div>
-
           <div>
             <Label>Bio</Label>
-            <Textarea rows={4} value={bio} onChange={(e) => setBio(e.target.value)}
-              placeholder="Tell clients about yourself..." className="mt-1.5" />
+            <Textarea rows={4} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell clients about yourself..." className="mt-1.5" />
           </div>
-
           <div className="pt-1">
             <Label className="text-xs text-muted-foreground">Member since</Label>
             <p className="text-sm mt-0.5">{storedUser?.createdAt ? format(new Date(storedUser.createdAt), "PPP") : "—"}</p>
           </div>
-
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" disabled={saving} className="bg-accent text-accent-foreground">
               {saving ? <><Loader2 size={14} className="animate-spin mr-1.5" />Saving…</> : "Save profile"}
             </Button>
-            <Button type="button" variant="outline"
-              onClick={() => { authService.clearSession(); window.location.href = "/login"; }}>
+            <Button type="button" variant="outline" onClick={() => { authService.clearSession(); window.location.href = "/login"; }}>
               Logout
             </Button>
           </div>
@@ -810,6 +984,9 @@ function Profile({
       </Card>
 
       <TimeSlotManager />
+
+      {/* ── Bank Details ─────────────────────────────────────────────────── */}
+      <BankDetailsManager />
     </div>
   );
 }
@@ -817,7 +994,6 @@ function Profile({
 // ── Routes ────────────────────────────────────────────────────────────────────
 export default function CreatorDashboardRoutes() {
   const [pricing, setPricingState] = useState<Pricing>({
-    // ── FIX: start with zeros so we never flash stale defaults
     dailyPrice: 0, monthlyPrice: 0, monthlySessions: 0,
   });
   const [pricingLoaded, setPricingLoaded] = useState(false);
@@ -825,8 +1001,6 @@ export default function CreatorDashboardRoutes() {
   useEffect(() => {
     authService.getPricing()
       .then(({ pricing: db }) => {
-        // ── FIX: coerce to Number so string values ("800") are handled correctly
-        //         and use nullish check instead of strict typeof guard
         if (db && db.dailyPrice != null) {
           setPricingState({
             dailyPrice:      Number(db.dailyPrice),
@@ -834,12 +1008,10 @@ export default function CreatorDashboardRoutes() {
             monthlySessions: Number(db.monthlySessions),
           });
         } else {
-          // ── FIX: fall back to sane defaults only if API returns nothing
           setPricingState({ dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20 });
         }
       })
       .catch(() => {
-        // ── FIX: on network error, fall back to defaults so UI isn't broken
         setPricingState({ dailyPrice: 800, monthlyPrice: 12000, monthlySessions: 20 });
       })
       .finally(() => setPricingLoaded(true));
@@ -847,7 +1019,6 @@ export default function CreatorDashboardRoutes() {
 
   const persistPricing = useCallback(async (p: Pricing): Promise<void> => {
     const res = await authService.savePricing(p);
-    // ── FIX: same Number() coercion on save response
     if (res?.pricing && res.pricing.dailyPrice != null) {
       setPricingState({
         dailyPrice:      Number(res.pricing.dailyPrice),

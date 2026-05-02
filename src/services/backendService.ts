@@ -437,14 +437,14 @@ export const chatService = {
     const token = localStorage.getItem("myfit_token");
     const formData = new FormData();
     formData.append("image", file);
-    const res = await fetch(`${API_URL}/api/upload/profile-image`, { // ← reuse existing endpoint
+    const res = await fetch(`${API_URL}/api/upload/chat-image`, {
       method: "POST",
       headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: formData,
     });
     const data = await res.json();
     if (!res.ok) throw new APIError(data.message || "Upload failed.", res.status);
-    return { imageUrl: data.imageUrl }; // ← profile-image returns imageUrl on the response
+    return { imageUrl: data.imageUrl };
   },
 };
 

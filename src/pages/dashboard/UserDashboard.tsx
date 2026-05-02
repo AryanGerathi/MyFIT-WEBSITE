@@ -1,5 +1,7 @@
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/KpiCard";
+import { useRef } from "react";  // add ref to the existing useState/useMemo/useEffect import
+import { Camera, Trash2 } from "lucide-react";  // add to existing lucide import
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -498,21 +500,110 @@ function Saved() {
   );
 }
 
-// ── Profile ───────────────────────────────────────────────────────────────────
+// ── Profile Image Upload ──────────────────────────────────────────────────────
+function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
+  currentUrl: string; initials: string; onUploaded: (url: string) => void;
+}) {
+  const fileRef                   = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [deleting,  setDeleting]  = useState(false);
+  const [preview,   setPreview]   = useState(currentUrl);
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPreview(URL.createObjectURL(file));
+    setUploading(true);
+    try {
+      const data = await authService.uploadProfileImage(file);
+      authService.updateStoredUser(data.user);
+      setPreview(data.imageUrl);
+      onUploaded(data.imageUrl);
+      toast.success("Profile photo updated!");
+    } catch (err) {
+      setPreview(currentUrl);
+      toast.error("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      const data = await authService.deleteProfileImage();
+      authService.updateStoredUser(data.user);
+      setPreview("");
+      onUploaded("");
+      toast.success("Profile photo removed.");
+    } catch {
+      toast.error("Could not remove photo.");
+    } finally { setDeleting(false); }
+  };
+
+  return (
+    <div className="flex items-center gap-6">
+      <div className="relative shrink-0">
+        <div className="h-24 w-24 rounded-2xl overflow-hidden bg-accent/10 flex items-center justify-center border-2 border-border">
+          {preview
+            ? <img src={preview} alt="Profile" className="h-full w-full object-cover" />
+            : <span className="font-display font-bold text-2xl text-accent">{initials}</span>}
+        </div>
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-accent text-accent-foreground
+                     flex items-center justify-center shadow-md hover:bg-accent/90 transition-colors disabled:opacity-60"
+        >
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+        </button>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium">Profile photo</p>
+        <p className="text-xs text-muted-foreground">JPG, PNG or WebP · max 5 MB</p>
+        <div className="flex gap-2 mt-1">
+          <Button type="button" size="sm" variant="outline" disabled={uploading}
+            onClick={() => fileRef.current?.click()} className="gap-1.5">
+            {uploading
+              ? <><Loader2 size={13} className="animate-spin" />Uploading…</>
+              : <><Camera size={13} />{preview ? "Change photo" : "Upload photo"}</>}
+          </Button>
+          {preview && (
+            <Button type="button" size="sm" variant="outline" disabled={deleting} onClick={handleDelete}
+              className="gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:border-destructive">
+              {deleting ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+              Remove
+            </Button>
+          )}
+        </div>
+      </div>
+      <input ref={fileRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp" className="hidden" onChange={handleFileChange} />
+    </div>
+  );
+}
+
+// ── Profile ───────────────────────────────────────────────────────────────────
 function Profile() {
-  const user = authService.getStoredUser();
+  const user     = authService.getStoredUser();
   const initials = user?.name
     ? user.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
     : "U";
 
+  const [profileImageUrl, setProfileImageUrl] = useState(user?.profileImage?.url || "");
+
   return (
     <div className="max-w-2xl space-y-6">
-      <Card className="p-6 border-border/60 shadow-card flex items-center gap-5">
-        <div className="h-16 w-16 rounded-2xl bg-accent/10 text-accent flex items-center justify-center font-display font-bold text-xl flex-shrink-0">
-          {initials}
-        </div>
-        <div>
+      {/* ── Avatar card ── */}
+      <Card className="p-6 border-border/60 shadow-card">
+        <ProfileImageUpload
+          currentUrl={profileImageUrl}
+          initials={initials}
+          onUploaded={(url) => setProfileImageUrl(url)}
+        />
+        <div className="mt-4 pt-4 border-t border-border/60">
           <p className="font-display font-bold text-lg">{user?.name || "—"}</p>
           <p className="text-sm text-muted-foreground">{user?.email || "—"}</p>
           <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium capitalize">
@@ -521,6 +612,7 @@ function Profile() {
         </div>
       </Card>
 
+      {/* ── Edit form ── */}
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-5">Your profile</h2>
         <form onSubmit={(e) => { e.preventDefault(); toast.success("Profile updated"); }} className="space-y-4">

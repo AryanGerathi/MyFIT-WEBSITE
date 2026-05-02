@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   LayoutDashboard, CalendarDays, Heart, User, Wallet, ClipboardList,
   Users, Briefcase, CreditCard, FileBarChart, CalendarCheck, Search,
-  ArrowDownToLine,
+  ArrowDownToLine, MessageCircle,
 } from "lucide-react";
 
 import { PublicLayout }    from "@/components/PublicLayout";
@@ -28,27 +28,29 @@ const queryClient = new QueryClient();
 
 const userItems = [
   { title: "Dashboard",      url: "/dashboard",               icon: LayoutDashboard },
-  { title: "My Bookings",    url: "/dashboard/bookings",      icon: CalendarDays },
-  { title: "Find Creators",  url: "/dashboard/find-creators", icon: Search },
-  { title: "Saved Creators", url: "/dashboard/saved",         icon: Heart },
-  { title: "Profile",        url: "/dashboard/profile",       icon: User },
+  { title: "My Bookings",    url: "/dashboard/bookings",      icon: CalendarDays    },
+  { title: "Find Creators",  url: "/dashboard/find-creators", icon: Search          },
+  { title: "Saved Creators", url: "/dashboard/saved",         icon: Heart           },
+  { title: "Messages",       url: "/dashboard/chats",         icon: MessageCircle   },
+  { title: "Profile",        url: "/dashboard/profile",       icon: User            },
 ];
 
 const creatorItems = [
-  { title: "Dashboard", url: "/creator-dashboard",          icon: LayoutDashboard },
-  { title: "Bookings",  url: "/creator-dashboard/bookings", icon: ClipboardList },
-  { title: "Earnings",  url: "/creator-dashboard/earnings", icon: Wallet },
-  { title: "Profile",   url: "/creator-dashboard/profile",  icon: User },
+  { title: "Dashboard", url: "/creator-dashboard",           icon: LayoutDashboard },
+  { title: "Bookings",  url: "/creator-dashboard/bookings",  icon: ClipboardList   },
+  { title: "Earnings",  url: "/creator-dashboard/earnings",  icon: Wallet          },
+  { title: "Messages",  url: "/creator-dashboard/chats",     icon: MessageCircle   },
+  { title: "Profile",   url: "/creator-dashboard/profile",   icon: User            },
 ];
 
 const adminItems = [
-  { title: "Overview",     url: "/admin",              icon: LayoutDashboard  },
-  { title: "Users",        url: "/admin/users",        icon: Users            },
-  { title: "Creators",     url: "/admin/creators",     icon: Briefcase        },
-  { title: "Payments",     url: "/admin/payments",     icon: CreditCard       },
-  { title: "Bookings",     url: "/admin/bookings",     icon: CalendarCheck    },
-  { title: "Withdrawals",  url: "/admin/withdrawals",  icon: ArrowDownToLine  },
-  { title: "Reports",      url: "/admin/reports",      icon: FileBarChart     },
+  { title: "Overview",    url: "/admin",             icon: LayoutDashboard },
+  { title: "Users",       url: "/admin/users",       icon: Users           },
+  { title: "Creators",    url: "/admin/creators",    icon: Briefcase       },
+  { title: "Payments",    url: "/admin/payments",    icon: CreditCard      },
+  { title: "Bookings",    url: "/admin/bookings",    icon: CalendarCheck   },
+  { title: "Withdrawals", url: "/admin/withdrawals", icon: ArrowDownToLine },
+  { title: "Reports",     url: "/admin/reports",     icon: FileBarChart    },
 ];
 
 const App = () => (
@@ -60,11 +62,11 @@ const App = () => (
         <Routes>
           {/* Public */}
           <Route element={<PublicLayout />}>
-            <Route path="/"            element={<Index />} />
-            <Route path="/explore"     element={<Explore />} />
-            <Route path="/creator/:id" element={<CreatorProfile />} />
-            <Route path="/booking"     element={<Booking />} />
-            <Route path="/payment"     element={<Payment />} />
+            <Route path="/"            element={<Index />}         />
+            <Route path="/explore"     element={<Explore />}       />
+            <Route path="/creator/:id" element={<CreatorProfile />}/>
+            <Route path="/booking"     element={<Booking />}       />
+            <Route path="/payment"     element={<Payment />}       />
           </Route>
 
           {/* Auth */}

@@ -390,6 +390,50 @@ export const creatorService = {
   getVerifiedCreators: () => apiFetch<PublicCreatorsResponse>("/api/creator/public"),
 };
 
+// ─── Chat Types ───────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  _id:            string;
+  conversationId: string;
+  senderId:       string;
+  text:           string;
+  readAt:         string | null;
+  createdAt:      string;
+}
+
+export interface Conversation {
+  _id:         string;
+  bookingId:   { _id: string; date?: string; sessionType: string; status: string } | null;
+  userId:      { _id: string; name: string; profileImage?: { url: string } };
+  creatorId:   { _id: string; name: string; profileImage?: { url: string } };
+  lastMessage: string;
+  lastAt:      string;
+}
+
+interface ConversationResponse  { success: true; conversation: Conversation; }
+interface MessagesResponse      { success: true; messages: ChatMessage[]; }
+interface SendMessageResponse   { success: true; message: ChatMessage; }
+interface ConversationsResponse { success: true; conversations: Conversation[]; }
+
+// ─── Chat Service ─────────────────────────────────────────────────────────────
+
+export const chatService = {
+  getOrCreateConversation: (bookingId: string) =>
+    apiFetch<ConversationResponse>(`/api/chat/booking/${bookingId}`),
+
+  getMessages: (conversationId: string) =>
+    apiFetch<MessagesResponse>(`/api/chat/${conversationId}/messages`),
+
+  sendMessage: (conversationId: string, text: string) =>
+    apiFetch<SendMessageResponse>(`/api/chat/${conversationId}/send`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+
+  getMyConversations: () =>
+    apiFetch<ConversationsResponse>("/api/chat/my-conversations"),
+};
+
 // ─── Payment Service ──────────────────────────────────────────────────────────
 
 export const paymentService = {

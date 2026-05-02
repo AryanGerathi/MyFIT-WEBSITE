@@ -23,6 +23,7 @@ import CreatorProfile from "@/pages/CreatorProfile";
 import Booking from "@/pages/Booking";
 import Payment from "@/pages/Payment";
 import { CreatorCard } from "@/components/CreatorCard";
+import { ChatList } from "@/components/ChatList";
 import { getSavedIds } from "@/lib/savedCreators";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -538,6 +539,7 @@ export default function UserDashboardRoutes() {
       <Route path="creator/:id"   element={<CreatorProfile />} />
       <Route path="booking"       element={<Booking />}        />
       <Route path="payment"       element={<Payment />}        />
+      <Route path="chats" element={<ChatList />} />
     </Routes>
   );
 }

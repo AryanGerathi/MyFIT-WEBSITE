@@ -17,7 +17,7 @@ import {
   Check, X, ShieldCheck, Loader2, RefreshCw,
   ArrowDownToLine, Phone, Mail, Clock, Calendar,
   CreditCard, Star, IndianRupee, User,
-  CheckCircle2,
+  CheckCircle2, Building2, BadgeCheck, Lock,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -141,14 +141,13 @@ function UserDetailDrawer({
   if (!user) return null;
 
   const { date: joinDate, time: joinTime } = formatDateTime(user.createdAt);
-  const userPayments  = allPayments.filter((p) => p.userId?.email === user.email);
-  const totalSpent    = userPayments.reduce((s, p) => s + p.amount, 0);
+  const userPayments   = allPayments.filter((p) => p.userId?.email === user.email);
+  const totalSpent     = userPayments.reduce((s, p) => s + p.amount, 0);
   const uniqueCreators = new Set(userPayments.map((p) => p.creatorId?.email)).size;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
       <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto p-0">
-        {/* Hero header */}
         <div className="bg-gradient-to-br from-accent/10 to-accent/5 border-b border-border/60 p-6">
           <SheetHeader className="mb-4">
             <SheetTitle className="text-left">User Profile</SheetTitle>
@@ -170,12 +169,10 @@ function UserDetailDrawer({
               </div>
             </div>
           </div>
-
-          {/* Quick stats */}
           <div className="grid grid-cols-3 gap-3 mt-5">
             {[
-              { label: "Total spent",  value: `₹${totalSpent.toLocaleString()}` },
-              { label: "Sessions",     value: String(userPayments.length) },
+              { label: "Total spent",   value: `₹${totalSpent.toLocaleString()}` },
+              { label: "Sessions",      value: String(userPayments.length) },
               { label: "Creators used", value: String(uniqueCreators) },
             ].map((s) => (
               <div key={s.label} className="bg-background/70 rounded-xl p-3 text-center border border-border/40">
@@ -186,16 +183,14 @@ function UserDetailDrawer({
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs defaultValue="profile" className="p-5">
           <TabsList className="w-full mb-5">
-            <TabsTrigger value="profile" className="flex-1">Profile</TabsTrigger>
+            <TabsTrigger value="profile"  className="flex-1">Profile</TabsTrigger>
             <TabsTrigger value="payments" className="flex-1">
               Payments{userPayments.length > 0 ? ` (${userPayments.length})` : ""}
             </TabsTrigger>
           </TabsList>
 
-          {/* Profile Tab */}
           <TabsContent value="profile" className="mt-0">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
               Contact Information
@@ -209,7 +204,6 @@ function UserDetailDrawer({
             </div>
           </TabsContent>
 
-          {/* Payments Tab */}
           <TabsContent value="payments" className="mt-0">
             {userPayments.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
@@ -272,17 +266,18 @@ function CreatorDetailDrawer({
   const creatorPayments    = allPayments.filter((p) => p.creatorId?.email === creator.email);
   const creatorWithdrawals = allWithdrawals.filter((w) => w.creatorId?.email === creator.email);
 
-  const grossRevenue    = creatorPayments.reduce((s, p) => s + p.amount, 0);
-  const totalCommission = creatorPayments.reduce((s, p) => s + p.commission, 0);
-  const netEarnings     = grossRevenue - totalCommission;
-  const totalWithdrawn  = creatorWithdrawals
+  const grossRevenue      = creatorPayments.reduce((s, p) => s + p.amount, 0);
+  const totalCommission   = creatorPayments.reduce((s, p) => s + p.commission, 0);
+  const netEarnings       = grossRevenue - totalCommission;
+  const totalWithdrawn    = creatorWithdrawals
     .filter((w) => w.status === "approved")
     .reduce((s, w) => s + w.amount, 0);
   const pendingWithdrawal = creatorWithdrawals
     .filter((w) => w.status === "pending")
     .reduce((s, w) => s + w.amount, 0);
 
-  const slots: string[] = (creator as any).creatorProfile?.timeSlots ?? [];
+  const slots: string[]  = (creator as any).creatorProfile?.timeSlots ?? [];
+  const bankDetails      = creator.creatorProfile?.bankDetails ?? null;
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
@@ -314,7 +309,6 @@ function CreatorDetailDrawer({
             </div>
           </div>
 
-          {/* Quick stats */}
           <div className="grid grid-cols-4 gap-2 mt-5">
             {[
               { label: "Gross",      value: `₹${grossRevenue.toLocaleString()}` },
@@ -334,6 +328,14 @@ function CreatorDetailDrawer({
         <Tabs defaultValue="profile" className="p-5">
           <TabsList className="w-full mb-5">
             <TabsTrigger value="profile"     className="flex-1">Profile</TabsTrigger>
+            <TabsTrigger value="bank"        className="flex-1 relative">
+              Bank
+              {bankDetails ? (
+                <span className="ml-1 inline-flex items-center">
+                  <BadgeCheck size={12} className="text-green-600" />
+                </span>
+              ) : null}
+            </TabsTrigger>
             <TabsTrigger value="clients"     className="flex-1">
               Clients{creatorPayments.length > 0 ? ` (${creatorPayments.length})` : ""}
             </TabsTrigger>
@@ -350,12 +352,12 @@ function CreatorDetailDrawer({
                 Contact Information
               </p>
               <div className="rounded-xl border border-border/60 overflow-hidden bg-card px-4">
-                <InfoRow icon={User}         label="Full name"  value={creator.name} />
-                <InfoRow icon={Mail}         label="Email"      value={creator.email} />
-                <InfoRow icon={Phone}        label="Phone"      value={`${creator.phone?.countryCode || ""} ${creator.phone?.number || ""}`.trim()} />
-                <InfoRow icon={Star}         label="Specialty"  value={creator.creatorProfile.specialization || "—"} />
-                <InfoRow icon={Calendar}     label="Joined"     value={`${joinDate} at ${joinTime}`} />
-                <InfoRow icon={ShieldCheck}  label="Verified"   value={creator.creatorProfile.verified ? "Yes" : "Pending"} />
+                <InfoRow icon={User}        label="Full name"  value={creator.name} />
+                <InfoRow icon={Mail}        label="Email"      value={creator.email} />
+                <InfoRow icon={Phone}       label="Phone"      value={`${creator.phone?.countryCode || ""} ${creator.phone?.number || ""}`.trim()} />
+                <InfoRow icon={Star}        label="Specialty"  value={creator.creatorProfile.specialization || "—"} />
+                <InfoRow icon={Calendar}    label="Joined"     value={`${joinDate} at ${joinTime}`} />
+                <InfoRow icon={ShieldCheck} label="Verified"   value={creator.creatorProfile.verified ? "Yes" : "Pending"} />
               </div>
             </div>
 
@@ -364,7 +366,7 @@ function CreatorDetailDrawer({
                 Pricing
               </p>
               <div className="rounded-xl border border-border/60 overflow-hidden bg-card px-4">
-                <InfoRow icon={IndianRupee}  label="Daily session"   value={creator.creatorProfile.dailyPrice ? `₹${creator.creatorProfile.dailyPrice.toLocaleString()}` : "—"} />
+                <InfoRow icon={IndianRupee}  label="Daily session"   value={creator.creatorProfile.dailyPrice   ? `₹${creator.creatorProfile.dailyPrice.toLocaleString()}`   : "—"} />
                 <InfoRow icon={IndianRupee}  label="Monthly package" value={creator.creatorProfile.monthlyPrice ? `₹${creator.creatorProfile.monthlyPrice.toLocaleString()}` : "—"} />
                 <InfoRow icon={CalendarCheck} label="Sessions/month" value={creator.creatorProfile.monthlySessions ? String(creator.creatorProfile.monthlySessions) : "—"} />
               </div>
@@ -382,6 +384,74 @@ function CreatorDetailDrawer({
                     </span>
                   ))}
                 </div>
+              </div>
+            )}
+          </TabsContent>
+
+          {/* ── Bank Details Tab ──────────────────────────────────────────── */}
+          <TabsContent value="bank" className="mt-0">
+            {bankDetails ? (
+              <div className="space-y-4">
+                {/* Security notice */}
+                <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs">
+                  <Lock size={13} className="shrink-0" />
+                  Bank details are only used for processing withdrawal payouts.
+                </div>
+
+                {/* Saved badge */}
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
+                    <Building2 size={18} className="text-green-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{bankDetails.bankName}</p>
+                    <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                      <BadgeCheck size={12} /> Bank details saved
+                    </span>
+                  </div>
+                </div>
+
+                {/* Details grid */}
+                <div className="rounded-xl border border-border/60 overflow-hidden bg-card px-4">
+                  <InfoRow
+                    icon={User}
+                    label="Account holder"
+                    value={bankDetails.accountHolderName}
+                  />
+                  <InfoRow
+                    icon={Building2}
+                    label="Bank name"
+                    value={bankDetails.bankName}
+                  />
+                  <InfoRow
+                    icon={CreditCard}
+                    label="Account number"
+                    value={`••••••${bankDetails.accountNumber.slice(-4)}`}
+                  />
+                  <InfoRow
+                    icon={BadgeCheck}
+                    label="IFSC code"
+                    value={bankDetails.ifscCode}
+                  />
+                  <InfoRow
+                    icon={Wallet}
+                    label="Account type"
+                    value={bankDetails.accountType.charAt(0).toUpperCase() + bankDetails.accountType.slice(1)}
+                  />
+                  {bankDetails.upiId && (
+                    <InfoRow
+                      icon={IndianRupee}
+                      label="UPI ID"
+                      value={bankDetails.upiId}
+                    />
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-16 text-muted-foreground">
+                <Building2 size={36} className="mx-auto mb-3 opacity-20" />
+                <p className="text-sm font-medium">No bank details saved</p>
+                <p className="text-xs mt-1">This creator hasn't added their bank details yet.</p>
               </div>
             )}
           </TabsContent>
@@ -429,10 +499,10 @@ function CreatorDetailDrawer({
           <TabsContent value="earnings" className="space-y-5 mt-0">
             <div className="grid grid-cols-2 gap-3">
               {[
-                { label: "Gross revenue",    value: `₹${grossRevenue.toLocaleString()}`,    color: "text-foreground" },
+                { label: "Gross revenue",      value: `₹${grossRevenue.toLocaleString()}`,    color: "text-foreground" },
                 { label: "Platform fee (20%)", value: `₹${totalCommission.toLocaleString()}`, color: "text-amber-600" },
-                { label: "Net earnings",     value: `₹${netEarnings.toLocaleString()}`,      color: "text-green-600" },
-                { label: "Total withdrawn",  value: `₹${totalWithdrawn.toLocaleString()}`,   color: "text-blue-600" },
+                { label: "Net earnings",       value: `₹${netEarnings.toLocaleString()}`,     color: "text-green-600" },
+                { label: "Total withdrawn",    value: `₹${totalWithdrawn.toLocaleString()}`,  color: "text-blue-600" },
               ].map((s) => (
                 <div key={s.label} className="rounded-xl border border-border/60 p-4 bg-card">
                   <p className="text-xs text-muted-foreground">{s.label}</p>
@@ -491,7 +561,6 @@ function CreatorDetailDrawer({
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Summary */}
                 <div className="rounded-xl bg-muted/40 border border-border/40 p-4 grid grid-cols-3 gap-3 text-center text-xs">
                   {[
                     { label: "Pending",  value: creatorWithdrawals.filter((w) => w.status === "pending").length,  color: "text-amber-600" },
@@ -505,7 +574,6 @@ function CreatorDetailDrawer({
                   ))}
                 </div>
 
-                {/* List */}
                 {creatorWithdrawals.map((w) => {
                   const { date, time } = formatDateTime(w.createdAt);
                   return (
@@ -542,9 +610,9 @@ function Overview() {
         adminService.getPayments(),
       ]);
       setStats({
-        users: users.length,
+        users:    users.length,
         creators: creators.length,
-        revenue: payments.reduce((s, p) => s + p.amount, 0),
+        revenue:  payments.reduce((s, p) => s + p.amount, 0),
         bookings: payments.length,
       });
     } catch { /* silent */ } finally { setLoading(false); }
@@ -555,10 +623,10 @@ function Overview() {
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total users"     value={loading ? "—" : String(stats?.users ?? "—")}                        icon={Users}         trend="+48 this week" />
-        <KpiCard label="Total creators"  value={loading ? "—" : String(stats?.creators ?? "—")}                     icon={Briefcase}     trend="+5 this week" />
-        <KpiCard label="Revenue (total)" value={loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}`}       icon={Wallet}        trend="+18% MoM" />
-        <KpiCard label="Bookings"        value={loading ? "—" : String(stats?.bookings ?? "—")}                     icon={CalendarCheck} />
+        <KpiCard label="Total users"     value={loading ? "—" : String(stats?.users ?? "—")}                  icon={Users}         trend="+48 this week" />
+        <KpiCard label="Total creators"  value={loading ? "—" : String(stats?.creators ?? "—")}               icon={Briefcase}     trend="+5 this week" />
+        <KpiCard label="Revenue (total)" value={loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}`} icon={Wallet}        trend="+18% MoM" />
+        <KpiCard label="Bookings"        value={loading ? "—" : String(stats?.bookings ?? "—")}               icon={CalendarCheck} />
       </div>
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-4">Revenue trend</h2>
@@ -644,24 +712,16 @@ function UsersPage() {
               const uPayments  = payments.filter((p) => p.userId?.email === u.email);
               const totalSpent = uPayments.reduce((s, p) => s + p.amount, 0);
               return (
-                <TableRow
-                  key={u._id}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  onClick={() => setSelected(u)}
-                >
+                <TableRow key={u._id} className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelected(u)}>
                   <TableCell className="font-medium">{u.name}</TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell><PhoneCell phone={u.phone} /></TableCell>
                   <DateTimeCell value={u.createdAt} />
                   <TableCell>
-                    {uPayments.length > 0
-                      ? uPayments.length
-                      : <span className="text-muted-foreground">0</span>}
+                    {uPayments.length > 0 ? uPayments.length : <span className="text-muted-foreground">0</span>}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {totalSpent > 0
-                      ? `₹${totalSpent.toLocaleString()}`
-                      : <span className="text-muted-foreground">—</span>}
+                    {totalSpent > 0 ? `₹${totalSpent.toLocaleString()}` : <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -745,7 +805,6 @@ function CreatorsPage() {
   return (
     <>
       <div className="space-y-6">
-        {/* Pending approvals */}
         <Card className="border-border/60 shadow-card overflow-hidden">
           <div className="p-5 border-b border-border/60 flex items-center justify-between">
             <div>
@@ -775,6 +834,7 @@ function CreatorsPage() {
                 <TableHead>Joined</TableHead>
                 <TableHead>Clients</TableHead>
                 <TableHead>Net earned</TableHead>
+                <TableHead>Bank</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -783,10 +843,7 @@ function CreatorsPage() {
                 const cp      = payments.filter((p) => p.creatorId?.email === c.email);
                 const revenue = cp.reduce((s, p) => s + p.amount - p.commission, 0);
                 return (
-                  <TableRow
-                    key={c._id}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
+                  <TableRow key={c._id} className="cursor-pointer hover:bg-muted/50 transition-colors">
                     <TableCell className="font-medium" onClick={() => setSelected(c)}>{c.name}</TableCell>
                     <TableCell className="text-muted-foreground" onClick={() => setSelected(c)}>{c.email}</TableCell>
                     <TableCell onClick={() => setSelected(c)}><PhoneCell phone={c.phone} /></TableCell>
@@ -797,6 +854,15 @@ function CreatorsPage() {
                     </TableCell>
                     <TableCell onClick={() => setSelected(c)} className="font-medium">
                       {revenue > 0 ? `₹${revenue.toLocaleString()}` : <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell onClick={() => setSelected(c)}>
+                      {c.creatorProfile.bankDetails ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                          <BadgeCheck size={12} /> Saved
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -813,12 +879,11 @@ function CreatorsPage() {
                   </TableRow>
                 );
               })}
-              {pending.length === 0 && <EmptyRow cols={8} message="No pending approvals." />}
+              {pending.length === 0 && <EmptyRow cols={9} message="No pending approvals." />}
             </TableBody>
           </Table>
         </Card>
 
-        {/* Verified creators */}
         <Card className="border-border/60 shadow-card overflow-hidden">
           <div className="p-5 border-b border-border/60">
             <h2 className="font-display font-semibold flex items-center gap-2">
@@ -842,6 +907,7 @@ function CreatorsPage() {
                 <TableHead>Clients</TableHead>
                 <TableHead>Net earned</TableHead>
                 <TableHead>Daily / Monthly</TableHead>
+                <TableHead>Bank</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
@@ -850,10 +916,7 @@ function CreatorsPage() {
                 const cp      = payments.filter((p) => p.creatorId?.email === c.email);
                 const revenue = cp.reduce((s, p) => s + p.amount - p.commission, 0);
                 return (
-                  <TableRow
-                    key={c._id}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
+                  <TableRow key={c._id} className="cursor-pointer hover:bg-muted/50 transition-colors">
                     <TableCell className="font-medium" onClick={() => setSelected(c)}>{c.name}</TableCell>
                     <TableCell className="text-muted-foreground" onClick={() => setSelected(c)}>{c.email}</TableCell>
                     <TableCell onClick={() => setSelected(c)}><PhoneCell phone={c.phone} /></TableCell>
@@ -867,6 +930,15 @@ function CreatorsPage() {
                     </TableCell>
                     <TableCell onClick={() => setSelected(c)}>
                       ₹{c.creatorProfile.dailyPrice ?? "—"} / ₹{c.creatorProfile.monthlyPrice ?? "—"}
+                    </TableCell>
+                    <TableCell onClick={() => setSelected(c)}>
+                      {c.creatorProfile.bankDetails ? (
+                        <span className="inline-flex items-center gap-1 text-xs text-green-700 font-medium">
+                          <BadgeCheck size={12} /> Saved
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                       <Button
@@ -884,7 +956,7 @@ function CreatorsPage() {
                   </TableRow>
                 );
               })}
-              {verified.length === 0 && <EmptyRow cols={9} message="No verified creators yet." />}
+              {verified.length === 0 && <EmptyRow cols={10} message="No verified creators yet." />}
             </TableBody>
           </Table>
         </Card>
@@ -1060,7 +1132,6 @@ function WithdrawalsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Pending */}
       <Card className="border-border/60 shadow-card overflow-hidden">
         <div className="p-5 border-b border-border/60 flex items-center justify-between">
           <div>
@@ -1073,9 +1144,7 @@ function WithdrawalsPage() {
                 </span>
               )}
             </h2>
-            <p className="text-sm text-muted-foreground">
-              Review and approve creator payout requests
-            </p>
+            <p className="text-sm text-muted-foreground">Review and approve creator payout requests</p>
           </div>
           <Button variant="outline" size="sm" onClick={fetchWithdrawals} className="gap-2">
             <RefreshCw size={13} /> Refresh
@@ -1106,9 +1175,7 @@ function WithdrawalsPage() {
                       className="bg-green-600 hover:bg-green-700 text-white gap-1.5"
                       onClick={() => handleAction(w._id, "approve")}
                     >
-                      {actionId === w._id
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <><Check size={13} /> Approve</>}
+                      {actionId === w._id ? <Loader2 size={13} className="animate-spin" /> : <><Check size={13} /> Approve</>}
                     </Button>
                     <Button
                       size="sm"
@@ -1117,9 +1184,7 @@ function WithdrawalsPage() {
                       className="gap-1.5 text-destructive hover:text-destructive border-destructive/30"
                       onClick={() => handleAction(w._id, "reject")}
                     >
-                      {actionId === w._id
-                        ? <Loader2 size={13} className="animate-spin" />
-                        : <><X size={13} /> Reject</>}
+                      {actionId === w._id ? <Loader2 size={13} className="animate-spin" /> : <><X size={13} /> Reject</>}
                     </Button>
                   </div>
                 </TableCell>
@@ -1130,14 +1195,11 @@ function WithdrawalsPage() {
         </Table>
       </Card>
 
-      {/* Resolved */}
       {resolved.length > 0 && (
         <Card className="border-border/60 shadow-card overflow-hidden">
           <div className="p-5 border-b border-border/60">
             <h2 className="font-display font-semibold">Resolved requests</h2>
-            <p className="text-sm text-muted-foreground">
-              Previously approved or rejected withdrawals
-            </p>
+            <p className="text-sm text-muted-foreground">Previously approved or rejected withdrawals</p>
           </div>
           <Table>
             <TableHeader>

@@ -4,6 +4,7 @@ import { KpiCard } from "@/components/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ChatList } from "@/components/ChatList";
 import { Textarea } from "@/components/ui/textarea";
 import { VideoCallButton } from "@/components/VideoCallButton";
 import {
@@ -1045,6 +1046,7 @@ export default function CreatorDashboardRoutes() {
       <Route path="bookings" element={<Bookings />} />
       <Route path="earnings" element={<Earnings  pricing={pricing} onSaveField={persistPricing} />} />
       <Route path="profile"  element={<Profile   pricing={pricing} onSaveField={persistPricing} />} />
+      <Route path="chats" element={<ChatList />} />
     </Routes>
   );
 }

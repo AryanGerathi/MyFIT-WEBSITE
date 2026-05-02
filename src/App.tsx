@@ -30,9 +30,9 @@ const userItems = [
   { title: "Dashboard",      url: "/dashboard",               icon: LayoutDashboard },
   { title: "My Bookings",    url: "/dashboard/bookings",      icon: CalendarDays    },
   { title: "Find Creators",  url: "/dashboard/find-creators", icon: Search          },
-  { title: "Saved Creators", url: "/dashboard/saved",         icon: Heart           },
   { title: "Messages",       url: "/dashboard/chats",         icon: MessageCircle   },
   { title: "Profile",        url: "/dashboard/profile",       icon: User            },
+  { title: "Saved Creators", url: "/dashboard/saved",         icon: Heart           },
 ];
 
 const creatorItems = [

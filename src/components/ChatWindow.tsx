@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Loader2, Send, X, MessageCircle, CheckCheck } from "lucide-react";
+import { Loader2, Send, X, MessageCircle, CheckCheck, ImagePlus } from "lucide-react";
 import { format, isToday, isYesterday } from "date-fns";
 import { chatService, type ChatMessage, type Conversation, authService } from "@/services/backendService";
+import { toast } from "sonner";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +21,33 @@ function Avatar({ name, imageUrl, size = "sm" }: { name: string; imageUrl?: stri
     : <div className={`${cls} rounded-full bg-accent/20 text-accent font-bold flex items-center justify-center shrink-0`}>{initials}</div>;
 }
 
+// ── Image message renderer ────────────────────────────────────────────────────
+
+function MessageBubble({ text, isMine, isTemp }: { text: string; isMine: boolean; isTemp: boolean }) {
+  const isImage = text.startsWith("[image]:");
+  const imageUrl = isImage ? text.replace("[image]:", "") : null;
+
+  return (
+    <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words
+      ${isMine
+        ? "bg-accent text-accent-foreground rounded-br-sm"
+        : "bg-muted text-foreground rounded-bl-sm"
+      } ${isTemp ? "opacity-60" : ""}`}
+    >
+      {isImage && imageUrl ? (
+        <img
+          src={imageUrl}
+          alt="shared"
+          className="max-w-[200px] rounded-xl object-cover cursor-pointer hover:opacity-90 transition-opacity"
+          onClick={() => window.open(imageUrl, "_blank")}
+        />
+      ) : (
+        text
+      )}
+    </div>
+  );
+}
+
 // ── Main ChatWindow ───────────────────────────────────────────────────────────
 
 interface ChatWindowProps {
@@ -27,23 +55,25 @@ interface ChatWindowProps {
   otherName:   string;
   otherImage?: string;
   onClose?:    () => void;
-  embedded?:   boolean; // true = full page, false = floating popup
+  embedded?:   boolean;
 }
 
 export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded = false }: ChatWindowProps) {
   const me = authService.getStoredUser();
 
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [messages,     setMessages]     = useState<ChatMessage[]>([]);
-  const [text,         setText]         = useState("");
-  const [loading,      setLoading]      = useState(true);
-  const [sending,      setSending]      = useState(false);
-  const [error,        setError]        = useState<string | null>(null);
+  const [conversation,    setConversation]    = useState<Conversation | null>(null);
+  const [messages,        setMessages]        = useState<ChatMessage[]>([]);
+  const [text,            setText]            = useState("");
+  const [loading,         setLoading]         = useState(true);
+  const [sending,         setSending]         = useState(false);
+  const [imageUploading,  setImageUploading]  = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
 
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const inputRef   = useRef<HTMLInputElement>(null);
-  const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null);
-  const convoIdRef = useRef<string | null>(null);
+  const bottomRef   = useRef<HTMLDivElement>(null);
+  const inputRef    = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const convoIdRef  = useRef<string | null>(null);
 
   // ── Scroll to bottom ────────────────────────────────────────────────────────
   const scrollToBottom = useCallback(() => {
@@ -58,7 +88,7 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
     } catch { /* silent poll failure */ }
   }, []);
 
-  // ── Init: get/create conversation ────────────────────────────────────────────
+  // ── Init ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -89,7 +119,7 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [conversation, fetchMessages]);
 
-  // ── Send ─────────────────────────────────────────────────────────────────────
+  // ── Send text ────────────────────────────────────────────────────────────────
   const handleSend = async () => {
     if (!text.trim() || !convoIdRef.current || sending) return;
     const optimistic: ChatMessage = {
@@ -111,6 +141,39 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
       setText(optimistic.text);
     } finally {
       setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  // ── Send image ────────────────────────────────────────────────────────────────
+  const handleImageSend = async (file: File) => {
+    if (!convoIdRef.current) return;
+
+    // Optimistic preview using local blob URL
+    const localUrl = URL.createObjectURL(file);
+    const optimistic: ChatMessage = {
+      _id:            `temp-img-${Date.now()}`,
+      conversationId: convoIdRef.current,
+      senderId:       me?._id ?? "",
+      text:           `[image]:${localUrl}`,
+      readAt:         null,
+      createdAt:      new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimistic]);
+    setImageUploading(true);
+
+    try {
+      const { imageUrl } = await chatService.uploadChatImage(file);
+      const { message }  = await chatService.sendMessage(convoIdRef.current, `[image]:${imageUrl}`);
+      // Replace optimistic with real message
+      setMessages((prev) => prev.map((m) => m._id === optimistic._id ? message : m));
+      URL.revokeObjectURL(localUrl);
+    } catch {
+      setMessages((prev) => prev.filter((m) => m._id !== optimistic._id));
+      URL.revokeObjectURL(localUrl);
+      toast.error("Image upload failed. Please try again.");
+    } finally {
+      setImageUploading(false);
       inputRef.current?.focus();
     }
   };
@@ -184,7 +247,6 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
         ) : (
           grouped.map(({ date, msgs }) => (
             <div key={date}>
-              {/* Date label */}
               <div className="flex items-center gap-2 my-3">
                 <div className="flex-1 h-px bg-border/60" />
                 <span className="text-xs text-muted-foreground px-2">{date}</span>
@@ -198,13 +260,7 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
                   <div key={msg._id} className={`flex items-end gap-2 mb-2 ${isMine ? "flex-row-reverse" : "flex-row"}`}>
                     {!isMine && <Avatar name={otherName} imageUrl={otherImage} />}
                     <div className={`max-w-[72%] ${isMine ? "items-end" : "items-start"} flex flex-col gap-0.5`}>
-                      <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed break-words
-                        ${isMine
-                          ? "bg-accent text-accent-foreground rounded-br-sm"
-                          : "bg-muted text-foreground rounded-bl-sm"
-                        } ${isTemp ? "opacity-60" : ""}`}>
-                        {msg.text}
-                      </div>
+                      <MessageBubble text={msg.text} isMine={isMine} isTemp={isTemp} />
                       <div className={`flex items-center gap-1 text-[10px] text-muted-foreground ${isMine ? "flex-row-reverse" : ""}`}>
                         <span>{formatTime(msg.createdAt)}</span>
                         {isMine && !isTemp && (
@@ -223,7 +279,33 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
 
       {/* ── Input ───────────────────────────────────────────────────────────── */}
       <div className="px-3 py-3 border-t border-border/60 bg-background shrink-0">
+        {/* Hidden file input */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleImageSend(file);
+            e.target.value = ""; // reset so same file can be re-selected
+          }}
+        />
+
         <div className="flex items-center gap-2 bg-muted/40 rounded-xl px-3 py-2">
+          {/* Image upload button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={imageUploading || sending}
+            title="Send image"
+            className="h-7 w-7 rounded-lg text-muted-foreground flex items-center justify-center
+                       hover:text-foreground hover:bg-muted transition-colors shrink-0 disabled:opacity-40"
+          >
+            {imageUploading
+              ? <Loader2 size={14} className="animate-spin" />
+              : <ImagePlus size={14} />}
+          </button>
+
           <input
             ref={inputRef}
             value={text}
@@ -232,15 +314,18 @@ export function ChatWindow({ bookingId, otherName, otherImage, onClose, embedded
             placeholder="Type a message…"
             className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
+
+          {/* Send button */}
           <button
             onClick={handleSend}
-            disabled={!text.trim() || sending}
+            disabled={!text.trim() || sending || imageUploading}
             className="h-8 w-8 rounded-lg bg-accent text-accent-foreground flex items-center justify-center
                        disabled:opacity-40 hover:bg-accent/90 transition-colors shrink-0"
           >
             {sending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
           </button>
         </div>
+
         <p className="text-[10px] text-muted-foreground text-center mt-1.5">
           Chat is deleted 24 hours after your session
         </p>

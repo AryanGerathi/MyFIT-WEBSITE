@@ -12,6 +12,7 @@ import { authService } from "@/services/backendService";
 
 export type SidebarItem = { title: string; url: string; icon: LucideIcon };
 
+// ── Desktop Sidebar ───────────────────────────────────────────────────────────
 export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; brandLabel: string }) {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -89,5 +90,42 @@ export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; 
         </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
+  );
+}
+
+// ── Mobile Bottom Nav ─────────────────────────────────────────────────────────
+export function BottomNav({ items }: { items: SidebarItem[] }) {
+  const { pathname } = useLocation();
+
+  // Show max 5 items
+  const navItems = items.slice(0, 5);
+
+  return (
+    <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border/60">
+      <div className="flex items-center justify-around px-1 py-1">
+        {navItems.map((item) => {
+          const active = pathname === item.url;
+          return (
+            <NavLink
+              key={item.title}
+              to={item.url}
+              end
+              className={cn(
+                "flex flex-col items-center gap-0.5 px-2 py-2 rounded-xl transition-colors min-w-0 flex-1",
+                active ? "text-accent" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <item.icon className={cn("h-5 w-5 shrink-0 transition-transform", active && "scale-110")} />
+              <span className={cn(
+                "text-[10px] font-medium truncate w-full text-center leading-tight",
+                active ? "text-accent" : "text-muted-foreground"
+              )}>
+                {item.title}
+              </span>
+            </NavLink>
+          );
+        })}
+      </div>
+    </nav>
   );
 }

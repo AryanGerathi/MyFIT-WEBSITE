@@ -55,8 +55,22 @@ function Overview() {
       .finally(() => setLoading(false));
   }, []);
 
-  const upcoming  = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
-  const completed = bookings.filter((b) => b.status === "completed");
+  const now = new Date();
+
+const upcoming = bookings.filter((b) => {
+  if (b.status === "completed") return false;
+  // If booking has a date, only show if it's today or future
+  if (b.date) return new Date(b.date) >= new Date(new Date().toDateString());
+  // Monthly plans (no date) — always show as upcoming
+  return b.status === "upcoming" || b.status === "success";
+});
+
+const completed = bookings.filter((b) => {
+  if (b.status === "completed") return true;
+  // Past dated bookings count as completed
+  if (b.date) return new Date(b.date) < new Date(new Date().toDateString());
+  return false;
+});
 
   return (
     <div className="space-y-6">
@@ -288,25 +302,50 @@ function FindCreators() {
       </aside>
 
       <div className="flex-1 min-w-0 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <div>
-            <h2 className="font-display font-bold text-xl">Find Creators</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {filtered.length} trainer{filtered.length !== 1 ? "s" : ""} available
-            </p>
-          </div>
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" className="lg:hidden gap-2">
-                <Filter size={16} /> Filters
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-80 overflow-y-auto">
-              <h2 className="font-display font-semibold mb-5 mt-4">Filters</h2>
-              <FilterPanel {...filterProps} />
-            </SheetContent>
-          </Sheet>
-        </div>
+  <div className="flex items-center justify-between flex-wrap gap-2">
+    <div>
+      <h2 className="font-display font-bold text-xl">Find Creators</h2>
+      <p className="text-sm text-muted-foreground mt-0.5">
+        {filtered.length} trainer{filtered.length !== 1 ? "s" : ""} available
+      </p>
+    </div>
+    <Sheet>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="lg:hidden gap-2">
+          <Filter size={16} /> Filters
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="w-80 overflow-y-auto">
+        <h2 className="font-display font-semibold mb-5 mt-4">Filters</h2>
+        <FilterPanel {...filterProps} />
+      </SheetContent>
+    </Sheet>
+  </div>
+
+  {/* ── Inline search bar — always visible ── */}
+  <div className="relative">
+    <Search
+      size={15}
+      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+    />
+    <input
+      type="text"
+      placeholder="Search by name or specialty…"
+      value={search}
+      onChange={(e) => setSearch(e.target.value)}
+      className="w-full h-10 pl-9 pr-9 rounded-xl border border-border bg-background text-sm
+                 placeholder:text-muted-foreground focus:outline-none focus:ring-2
+                 focus:ring-accent/40 focus:border-accent transition-colors"
+    />
+    {search && (
+      <button
+        onClick={() => setSearch("")}
+        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+      >
+        <X size={14} />
+      </button>
+    )}
+  </div>
 
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -316,7 +355,7 @@ function FindCreators() {
             <Button variant="outline" size="sm" className="mt-4" onClick={clearAll}>Clear filters</Button>
           </div>
         ) : (
-          <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             {filtered.map((c) => <CreatorCard key={c._id} creator={c} variant="dashboard" />)}
           </div>
         )}
@@ -354,8 +393,19 @@ function MyBookings() {
     </Card>
   );
 
-  const upcoming  = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
-  const completed = bookings.filter((b) => b.status === "completed");
+  const today = new Date(new Date().toDateString());
+
+const upcoming = bookings.filter((b) => {
+  if (b.status === "completed") return false;
+  if (b.date) return new Date(b.date) >= today;
+  return b.status === "upcoming" || b.status === "success";
+});
+
+const completed = bookings.filter((b) => {
+  if (b.status === "completed") return true;
+  if (b.date) return new Date(b.date) < today;
+  return false;
+});
 
   const BookingCard = ({ b }: { b: UserBooking }) => (
     <Card key={b._id} className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">

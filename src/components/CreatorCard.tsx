@@ -52,7 +52,9 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
-            <span className="font-display font-bold text-4xl text-accent select-none">{initials}</span>
+            <span className="font-display font-bold text-2xl sm:text-4xl text-accent select-none">
+              {initials}
+            </span>
           )}
         </div>
         <button
@@ -61,72 +63,86 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
             saved ? "bg-red-500 text-white" : "bg-black/30 text-white hover:bg-black/50"
           }`}
         >
-          <Heart size={14} fill={saved ? "currentColor" : "none"} />
+          <Heart size={12} fill={saved ? "currentColor" : "none"} />
         </button>
       </Link>
 
-      <div className="p-5 space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="font-display font-semibold text-lg leading-tight">{name}</h3>
-              {verified && <BadgeCheck size={16} className="text-accent" />}
+      <div className="p-2.5 sm:p-5 space-y-2 sm:space-y-3">
+        {/* Name + badge row */}
+        <div className="flex items-start justify-between gap-1">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <h3 className="font-display font-semibold text-sm sm:text-lg leading-tight truncate">
+                {name}
+              </h3>
+              {verified && <BadgeCheck size={13} className="text-accent shrink-0" />}
             </div>
-            <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{subtitle}</p>
+            <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1">
+              {subtitle}
+            </p>
           </div>
           {specialty && (
-            <Badge variant="secondary" className="shrink-0 font-medium">{specialty}</Badge>
+            <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 font-medium text-xs">
+              {specialty}
+            </Badge>
           )}
         </div>
 
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+        {/* Rating + price */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+          <div className="flex items-center gap-1">
             <RatingStars rating={rating} />
-            <span className="text-sm font-medium">{rating > 0 ? rating : "New"}</span>
+            <span className="text-[11px] sm:text-sm font-medium">{rating > 0 ? rating : "New"}</span>
             {reviews > 0 && (
-              <span className="text-xs text-muted-foreground">({reviews})</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">({reviews})</span>
             )}
           </div>
-          <div className="text-right">
+          <div className="text-left sm:text-right">
             {dailyPrice > 0 ? (
               <>
-                <span className="font-display font-bold text-lg text-primary">
+                <span className="font-display font-bold text-sm sm:text-lg text-primary">
                   ₹{dailyPrice.toLocaleString()}
                 </span>
-                <span className="text-xs text-muted-foreground">/session</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">/session</span>
               </>
             ) : monthlyPrice > 0 ? (
               <>
-                <span className="font-display font-bold text-lg text-primary">
+                <span className="font-display font-bold text-sm sm:text-lg text-primary">
                   ₹{monthlyPrice.toLocaleString()}
                 </span>
-                <span className="text-xs text-muted-foreground">/month</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">/mo</span>
               </>
             ) : (
-              <span className="text-xs text-muted-foreground italic">Pricing TBD</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground italic">TBD</span>
             )}
           </div>
         </div>
 
+        {/* Buttons */}
         {variant === "dashboard" ? (
-          <div className="flex gap-2">
-            {/* Both buttons go to profile — plan/date/slot selection happens there */}
+          <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
             <Button
-              className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground"
+              size="sm"
+              className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
               onClick={() => navigate(profilePath)}
             >
-              Book Session
+              Book
             </Button>
             <Button
+              size="sm"
               variant="outline"
-              className="flex-1"
+              className="flex-1 text-xs sm:text-sm h-8 sm:h-9"
               onClick={() => navigate(profilePath)}
             >
-              View Profile
+              View
             </Button>
           </div>
         ) : (
-          <Button asChild className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+          <Button
+            asChild
+            size="sm"
+            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
+          >
             <Link to={profilePath}>View Profile</Link>
           </Button>
         )}

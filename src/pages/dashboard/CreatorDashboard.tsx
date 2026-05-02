@@ -33,7 +33,13 @@ function Overview() {
       .finally(() => setLoading(false));
   }, []);
 
-  const upcoming      = bookings.filter((b) => b.status === "upcoming" || b.status === "success");
+  const today = new Date(new Date().toDateString());
+  const upcoming = bookings.filter((b) => {
+    if (b.status === "completed") return false;
+    if (b.date) return new Date(b.date) >= today;
+    return b.status === "upcoming" || b.status === "success";
+  });
+
   const totalEarnings = bookings.reduce((sum, b) => {
     const basePrice  = Math.round(b.amount / 1.02);
     const commission = Math.round(basePrice * 0.20);
@@ -122,9 +128,13 @@ function Bookings() {
           </div>
           <div className="flex items-center gap-3">
             <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
-            {(b.status === "upcoming" || b.status === "success")
-              ? <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />
-              : <span className="text-sm px-3 py-1.5 rounded-md bg-success/10 text-success font-medium">Completed</span>}
+            {(() => {
+  const today = new Date(new Date().toDateString());
+  const isPast = b.date ? new Date(b.date) < today : false;
+  return isPast || b.status === "completed"
+    ? <span className="text-sm px-3 py-1.5 rounded-md bg-success/10 text-success font-medium">Completed</span>
+    : <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />;
+})()}
           </div>
         </Card>
       ))}

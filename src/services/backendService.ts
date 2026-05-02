@@ -432,6 +432,20 @@ export const chatService = {
 
   getMyConversations: () =>
     apiFetch<ConversationsResponse>("/api/chat/my-conversations"),
+
+  uploadChatImage: async (file: File): Promise<{ imageUrl: string }> => {
+    const token = localStorage.getItem("myfit_token");
+    const formData = new FormData();
+    formData.append("image", file);
+    const res = await fetch(`${API_URL}/api/upload/profile-image`, { // ← reuse existing endpoint
+      method: "POST",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new APIError(data.message || "Upload failed.", res.status);
+    return { imageUrl: data.imageUrl }; // ← profile-image returns imageUrl on the response
+  },
 };
 
 // ─── Payment Service ──────────────────────────────────────────────────────────

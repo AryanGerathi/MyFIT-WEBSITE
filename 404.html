@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>MyFit</title>
+    <script>
+      // GitHub Pages 404 SPA fix
+      // Captures the full path/search/hash and redirects to index.html
+      // with it encoded as a query param, which index.html then restores.
+      var base   = '/MyFIT-WEBSITE';
+      var path   = window.location.pathname.replace(base, '') || '/';
+      var search = window.location.search;
+      var hash   = window.location.hash;
+      var redirect = base + '/?p=' + encodeURIComponent(path + search + hash);
+      window.location.replace(redirect);
+    </script>
+  </head>
+  <body></body>
+</html>

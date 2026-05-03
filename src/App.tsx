@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -54,57 +55,67 @@ const adminItems = [
 ];
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <Routes>
-          {/* Public */}
-          <Route element={<PublicLayout />}>
-            <Route path="/"            element={<Index />}         />
-            <Route path="/explore"     element={<Explore />}       />
-            <Route path="/creator/:id" element={<CreatorProfile />}/>
-            <Route path="/booking"     element={<Booking />}       />
-            <Route path="/payment"     element={<Payment />}       />
-          </Route>
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        {/*
+          basename={import.meta.env.BASE_URL} reads from vite.config.ts:
+            - development → "/"
+            - production  → "/MyFIT-WEBSITE/"
+          This ensures all <Link> and navigate() calls are prefixed correctly
+          on GitHub Pages, fixing the 404-on-reload issue.
+        */}
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
+          <Routes>
+            {/* ── Public ───────────────────────────────────────────── */}
+            <Route element={<PublicLayout />}>
+              <Route path="/"            element={<Index />}          />
+              <Route path="/explore"     element={<Explore />}        />
+              <Route path="/creator/:id" element={<CreatorProfile />} />
+              <Route path="/booking"     element={<Booking />}        />
+              <Route path="/payment"     element={<Payment />}        />
+            </Route>
 
-          {/* Auth */}
-          <Route path="/login"  element={<Auth mode="login"  />} />
-          <Route path="/signup" element={<Auth mode="signup" />} />
+            {/* ── Auth ─────────────────────────────────────────────── */}
+            <Route path="/login"  element={<Auth mode="login"  />} />
+            <Route path="/signup" element={<Auth mode="signup" />} />
 
-          {/* User dashboard */}
-          <Route element={
-            <ProtectedRoute requiredRole="user">
-              <DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />
-            </ProtectedRoute>
-          }>
-            <Route path="/dashboard/*" element={<UserDashboardRoutes />} />
-          </Route>
+            {/* ── User dashboard ───────────────────────────────────── */}
+            <Route element={
+              <ProtectedRoute requiredRole="user">
+                <DashboardLayout items={userItems} brandLabel="User" title="Dashboard" />
+              </ProtectedRoute>
+            }>
+              <Route path="/dashboard/*" element={<UserDashboardRoutes />} />
+            </Route>
 
-          {/* Creator dashboard */}
-          <Route element={
-            <ProtectedRoute requiredRole="creator">
-              <DashboardLayout items={creatorItems} brandLabel="Creator" title="Creator Studio" />
-            </ProtectedRoute>
-          }>
-            <Route path="/creator-dashboard/*" element={<CreatorDashboardRoutes />} />
-          </Route>
+            {/* ── Creator dashboard ────────────────────────────────── */}
+            <Route element={
+              <ProtectedRoute requiredRole="creator">
+                <DashboardLayout items={creatorItems} brandLabel="Creator" title="Creator Studio" />
+              </ProtectedRoute>
+            }>
+              <Route path="/creator-dashboard/*" element={<CreatorDashboardRoutes />} />
+            </Route>
 
-          {/* Admin dashboard */}
-          <Route element={
-            <ProtectedRoute>
-              <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />
-            </ProtectedRoute>
-          }>
-            <Route path="/admin/*" element={<AdminDashboardRoutes />} />
-          </Route>
+            {/* ── Admin dashboard ──────────────────────────────────── */}
+            <Route element={
+              <ProtectedRoute>
+                <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />
+              </ProtectedRoute>
+            }>
+              <Route path="/admin/*" element={<AdminDashboardRoutes />} />
+            </Route>
 
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+            {/* ── 404 ──────────────────────────────────────────────── */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </StrictMode>
 );
 
 export default App;

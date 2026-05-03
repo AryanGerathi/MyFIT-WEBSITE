@@ -58,12 +58,13 @@ export interface PublicCreator {
   createdAt: string;
 }
 
+
+
 export interface AdminCreator {
   _id: string;
   name: string;
   email: string;
-  phone: { countryCode: string; number: string };
-  isVerified: boolean;
+  phone?: { countryCode?: string; number?: string };
   createdAt: string;
   creatorProfile: {
     bio: string;
@@ -72,6 +73,7 @@ export interface AdminCreator {
     dailyPrice: number;
     monthlyPrice: number;
     monthlySessions: number;
+    timeSlots?: string[];      // ← ADD THIS LINE
     bankDetails?: BankDetails;
   };
 }

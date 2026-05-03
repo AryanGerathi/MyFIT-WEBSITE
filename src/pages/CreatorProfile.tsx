@@ -7,6 +7,7 @@ import { RatingStars } from "@/components/RatingStars";
 import {
   BadgeCheck, Award, Sparkles, Loader2, AlertCircle,
   Clock, Heart, CheckCircle2, CalendarDays, Info,
+  Share2, Copy, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -17,6 +18,53 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 
 type SessionType = "single" | "monthly";
+
+// ── Share Button ──────────────────────────────────────────────────────────────
+
+function ShareButton({ name }: { name: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = window.location.href;
+
+  const handleShare = async () => {
+    // Use native share sheet on mobile if available
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${name} — Trainer Profile`,
+          text:  `Check out ${name}'s trainer profile!`,
+          url,
+        });
+        return;
+      } catch {
+        // user cancelled native share — fall through to clipboard
+      }
+    }
+    // Fallback: copy to clipboard
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast.success("Profile link copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link");
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={handleShare}
+      className="flex items-center gap-1.5 transition-colors shrink-0"
+    >
+      {copied
+        ? <><Check size={15} className="text-green-600" /> Copied!</>
+        : <><Share2 size={15} /> Share</>}
+    </Button>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
 
 const CreatorProfile = () => {
   const { id }   = useParams<{ id: string }>();
@@ -82,25 +130,23 @@ const CreatorProfile = () => {
     if (!creator) return;
 
     if (sessionType === "single") {
-      // ── SINGLE SESSION ──────────────────────────────────────────
       if (!singleDate || !slot) {
         toast.error("Please select a date and time slot");
         return;
       }
       navigate(bookingPath, {
         state: {
-          creatorId:   creator._id,
-          creatorName: name,
+          creatorId:    creator._id,
+          creatorName:  name,
           creatorImage: imageUrl,
-          price:       dailyPrice,
-          sessionType: "single",
-          prefillDate: singleDate.toISOString(),
-          prefillTime: slot,         // ← selected slot pre-fills Booking page
-          timeSlots,                 // ← all slots so Booking can render them
+          price:        dailyPrice,
+          sessionType:  "single",
+          prefillDate:  singleDate.toISOString(),
+          prefillTime:  slot,
+          timeSlots,
         },
       });
     } else {
-      // ── MONTHLY PLAN ─────────────────────────────────────────────
       if (!monthlyPrice) {
         toast.error("Monthly plan not available");
         return;
@@ -121,9 +167,9 @@ const CreatorProfile = () => {
           price:          monthlyPrice,
           sessionType:    "monthly",
           sessionDates:   selectedDates.map((d) => d.toISOString()),
-          prefillTime:    monthlySlot,  // ← selected slot pre-fills Booking page
+          prefillTime:    monthlySlot,
           monthlySessions,
-          timeSlots,                    // ← all slots so Booking can render them
+          timeSlots,
         },
       });
     }
@@ -235,16 +281,20 @@ const CreatorProfile = () => {
                 {verified && <BadgeCheck className="text-accent" />}
                 {specialty && <Badge variant="secondary">{specialty}</Badge>}
               </div>
-              <Button
-                variant="outline" size="sm" onClick={handleSave}
-                className={cn(
-                  "flex items-center gap-1.5 transition-colors shrink-0",
-                  saved && "border-rose-400 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                )}
-              >
-                <Heart size={15} className={cn("transition-all", saved && "fill-rose-500 text-rose-500")} />
-                {saved ? "Saved" : "Save"}
-              </Button>
+              {/* Save + Share buttons */}
+              <div className="flex items-center gap-2 shrink-0">
+                <ShareButton name={name} />
+                <Button
+                  variant="outline" size="sm" onClick={handleSave}
+                  className={cn(
+                    "flex items-center gap-1.5 transition-colors",
+                    saved && "border-rose-400 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                  )}
+                >
+                  <Heart size={15} className={cn("transition-all", saved && "fill-rose-500 text-rose-500")} />
+                  {saved ? "Saved" : "Save"}
+                </Button>
+              </div>
             </div>
             <p className="text-muted-foreground mt-1">{specialty}</p>
             <div className="flex items-center gap-4 mt-3 flex-wrap">

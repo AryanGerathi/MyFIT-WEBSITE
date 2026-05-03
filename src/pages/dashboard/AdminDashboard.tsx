@@ -17,7 +17,7 @@ import {
   Check, X, ShieldCheck, Loader2, RefreshCw,
   ArrowDownToLine, Phone, Mail, Clock, Calendar,
   CreditCard, Star, IndianRupee, User,
-  CheckCircle2, Building2, BadgeCheck, Lock,
+  CheckCircle2, Building2, BadgeCheck, Lock, Search,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -121,6 +121,53 @@ function InfoRow({
       </div>
       <span className="text-xs text-muted-foreground w-28 shrink-0">{label}</span>
       <span className="text-sm font-medium truncate">{value || "—"}</span>
+    </div>
+  );
+}
+
+// ── Search Bar Component ──────────────────────────────────────────────────────
+
+function SearchBar({
+  value,
+  onChange,
+  onClear,
+  onRefresh,
+  placeholder = "Search…",
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClear: () => void;
+  onRefresh: () => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <Search
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
+        />
+        <input
+          type="text"
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 pl-8 pr-8 rounded-lg border border-border bg-background text-sm
+                     placeholder:text-muted-foreground focus:outline-none focus:ring-2
+                     focus:ring-accent/40 focus:border-accent transition-colors w-48"
+        />
+        {value && (
+          <button
+            onClick={onClear}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+      <Button variant="outline" size="sm" onClick={onRefresh} className="gap-2">
+        <RefreshCw size={13} /> Refresh
+      </Button>
     </div>
   );
 }
@@ -276,7 +323,8 @@ function CreatorDetailDrawer({
     .filter((w) => w.status === "pending")
     .reduce((s, w) => s + w.amount, 0);
 
-  const slots: string[]  = (creator as any).creatorProfile?.timeSlots ?? [];
+  // FIX: removed (creator as any) cast — use safe optional chaining
+  const slots: string[]  = creator.creatorProfile?.timeSlots ?? [];
   const bankDetails      = creator.creatorProfile?.bankDetails ?? null;
 
   return (
@@ -366,9 +414,9 @@ function CreatorDetailDrawer({
                 Pricing
               </p>
               <div className="rounded-xl border border-border/60 overflow-hidden bg-card px-4">
-                <InfoRow icon={IndianRupee}  label="Daily session"   value={creator.creatorProfile.dailyPrice   ? `₹${creator.creatorProfile.dailyPrice.toLocaleString()}`   : "—"} />
-                <InfoRow icon={IndianRupee}  label="Monthly package" value={creator.creatorProfile.monthlyPrice ? `₹${creator.creatorProfile.monthlyPrice.toLocaleString()}` : "—"} />
-                <InfoRow icon={CalendarCheck} label="Sessions/month" value={creator.creatorProfile.monthlySessions ? String(creator.creatorProfile.monthlySessions) : "—"} />
+                <InfoRow icon={IndianRupee}   label="Daily session"   value={creator.creatorProfile.dailyPrice   ? `₹${creator.creatorProfile.dailyPrice.toLocaleString()}`   : "—"} />
+                <InfoRow icon={IndianRupee}   label="Monthly package" value={creator.creatorProfile.monthlyPrice ? `₹${creator.creatorProfile.monthlyPrice.toLocaleString()}` : "—"} />
+                <InfoRow icon={CalendarCheck} label="Sessions/month"  value={creator.creatorProfile.monthlySessions ? String(creator.creatorProfile.monthlySessions) : "—"} />
               </div>
             </div>
 
@@ -388,17 +436,14 @@ function CreatorDetailDrawer({
             )}
           </TabsContent>
 
-          {/* ── Bank Details Tab ──────────────────────────────────────────── */}
+          {/* Bank Details Tab */}
           <TabsContent value="bank" className="mt-0">
             {bankDetails ? (
               <div className="space-y-4">
-                {/* Security notice */}
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs">
                   <Lock size={13} className="shrink-0" />
                   Bank details are only used for processing withdrawal payouts.
                 </div>
-
-                {/* Saved badge */}
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-green-50 border border-green-200 flex items-center justify-center shrink-0">
                     <Building2 size={18} className="text-green-600" />
@@ -410,40 +455,14 @@ function CreatorDetailDrawer({
                     </span>
                   </div>
                 </div>
-
-                {/* Details grid */}
                 <div className="rounded-xl border border-border/60 overflow-hidden bg-card px-4">
-                  <InfoRow
-                    icon={User}
-                    label="Account holder"
-                    value={bankDetails.accountHolderName}
-                  />
-                  <InfoRow
-                    icon={Building2}
-                    label="Bank name"
-                    value={bankDetails.bankName}
-                  />
-                  <InfoRow
-                    icon={CreditCard}
-                    label="Account number"
-                    value={`••••••${bankDetails.accountNumber.slice(-4)}`}
-                  />
-                  <InfoRow
-                    icon={BadgeCheck}
-                    label="IFSC code"
-                    value={bankDetails.ifscCode}
-                  />
-                  <InfoRow
-                    icon={Wallet}
-                    label="Account type"
-                    value={bankDetails.accountType.charAt(0).toUpperCase() + bankDetails.accountType.slice(1)}
-                  />
+                  <InfoRow icon={User}        label="Account holder" value={bankDetails.accountHolderName} />
+                  <InfoRow icon={Building2}   label="Bank name"      value={bankDetails.bankName} />
+                  <InfoRow icon={CreditCard}  label="Account number" value={bankDetails.accountNumber} />
+                  <InfoRow icon={BadgeCheck}  label="IFSC code"      value={bankDetails.ifscCode} />
+                  <InfoRow icon={Wallet}      label="Account type"   value={bankDetails.accountType.charAt(0).toUpperCase() + bankDetails.accountType.slice(1)} />
                   {bankDetails.upiId && (
-                    <InfoRow
-                      icon={IndianRupee}
-                      label="UPI ID"
-                      value={bankDetails.upiId}
-                    />
+                    <InfoRow icon={IndianRupee} label="UPI ID" value={bankDetails.upiId} />
                   )}
                 </div>
               </div>
@@ -573,7 +592,6 @@ function CreatorDetailDrawer({
                     </div>
                   ))}
                 </div>
-
                 {creatorWithdrawals.map((w) => {
                   const { date, time } = formatDateTime(w.createdAt);
                   return (
@@ -598,11 +616,14 @@ function CreatorDetailDrawer({
 // ── Overview ──────────────────────────────────────────────────────────────────
 
 function Overview() {
-  const [stats, setStats] = useState<{ users: number; creators: number; revenue: number; bookings: number } | null>(null);
+  const [stats,   setStats]   = useState<{ users: number; creators: number; revenue: number; bookings: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  // FIX: added error state — no more silent failures
+  const [error,   setError]   = useState<string | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [{ users }, { creators }, { payments }] = await Promise.all([
         adminService.getUsers(),
@@ -615,18 +636,26 @@ function Overview() {
         revenue:  payments.reduce((s, p) => s + p.amount, 0),
         bookings: payments.length,
       });
-    } catch { /* silent */ } finally { setLoading(false); }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not load overview stats.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { fetchStats(); }, [fetchStats]);
 
+  if (error) return <ErrorState message={error} onRetry={fetchStats} />;
+
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total users"     value={loading ? "—" : String(stats?.users ?? "—")}                  icon={Users}         trend="+48 this week" />
-        <KpiCard label="Total creators"  value={loading ? "—" : String(stats?.creators ?? "—")}               icon={Briefcase}     trend="+5 this week" />
-        <KpiCard label="Revenue (total)" value={loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}`} icon={Wallet}        trend="+18% MoM" />
-        <KpiCard label="Bookings"        value={loading ? "—" : String(stats?.bookings ?? "—")}               icon={CalendarCheck} />
+        <KpiCard label="Total users"     value={loading ? "—" : String(stats?.users    ?? "—")} icon={Users}         />
+        <KpiCard label="Total creators"  value={loading ? "—" : String(stats?.creators ?? "—")} icon={Briefcase}     />
+        <KpiCard label="Revenue (total)" value={loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}`}        icon={Wallet}        />
+        <KpiCard label="Bookings"        value={loading ? "—" : String(stats?.bookings ?? "—")} icon={CalendarCheck} />
       </div>
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-4">Revenue trend</h2>
@@ -660,6 +689,7 @@ function UsersPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [search,   setSearch]   = useState("");
 
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
@@ -678,22 +708,35 @@ function UsersPage() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  const filtered = users.filter((u) => {
+    const q = search.toLowerCase();
+    return (
+      u.name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      `${u.phone?.countryCode ?? ""} ${u.phone?.number ?? ""}`.includes(q)
+    );
+  });
+
   if (loading) return <LoadingState message="Loading users…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
   return (
     <>
       <Card className="border-border/60 shadow-card overflow-hidden">
-        <div className="p-5 border-b border-border/60 flex items-center justify-between">
+        <div className="p-5 border-b border-border/60 flex items-center justify-between flex-wrap gap-3">
           <div>
             <h2 className="font-display font-semibold">All users</h2>
             <p className="text-sm text-muted-foreground">
-              {users.length} registered · click any row to view full details
+              {filtered.length} of {users.length} · click any row to view full details
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-            <RefreshCw size={13} /> Refresh
-          </Button>
+          <SearchBar
+            value={search}
+            onChange={setSearch}
+            onClear={() => setSearch("")}
+            onRefresh={fetchAll}
+            placeholder="Search users…"
+          />
         </div>
         <Table>
           <TableHeader>
@@ -708,7 +751,7 @@ function UsersPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {users.map((u) => {
+            {filtered.map((u) => {
               const uPayments  = payments.filter((p) => p.userId?.email === u.email);
               const totalSpent = uPayments.reduce((s, p) => s + p.amount, 0);
               return (
@@ -734,7 +777,9 @@ function UsersPage() {
                 </TableRow>
               );
             })}
-            {users.length === 0 && <EmptyRow cols={7} message="No users found." />}
+            {filtered.length === 0 && (
+              <EmptyRow cols={7} message={search ? `No users matching "${search}"` : "No users found."} />
+            )}
           </TableBody>
         </Table>
       </Card>
@@ -759,6 +804,7 @@ function CreatorsPage() {
   const [error,       setError]       = useState<string | null>(null);
   const [actionId,    setActionId]    = useState<string | null>(null);
   const [selected,    setSelected]    = useState<AdminCreator | null>(null);
+  const [search,      setSearch]      = useState("");
 
   const fetchAll = useCallback(async () => {
     setLoading(true); setError(null);
@@ -799,30 +845,50 @@ function CreatorsPage() {
   if (loading) return <LoadingState message="Loading creators…" />;
   if (error)   return <ErrorState  message={error} onRetry={fetchAll} />;
 
-  const pending  = creators.filter((c) => !c.creatorProfile.verified);
-  const verified = creators.filter((c) =>  c.creatorProfile.verified);
+  const matchesSearch = (c: AdminCreator) => {
+    const q = search.toLowerCase();
+    return (
+      c.name.toLowerCase().includes(q) ||
+      c.email.toLowerCase().includes(q) ||
+      (c.creatorProfile.specialization ?? "").toLowerCase().includes(q)
+    );
+  };
+
+  const pending     = creators.filter((c) => !c.creatorProfile.verified && matchesSearch(c));
+  const verified    = creators.filter((c) =>  c.creatorProfile.verified && matchesSearch(c));
+  const allPending  = creators.filter((c) => !c.creatorProfile.verified);
+  const allVerified = creators.filter((c) =>  c.creatorProfile.verified);
+
+  const sharedSearchBar = (
+    <SearchBar
+      value={search}
+      onChange={setSearch}
+      onClear={() => setSearch("")}
+      onRefresh={fetchAll}
+      placeholder="Search creators…"
+    />
+  );
 
   return (
     <>
       <div className="space-y-6">
+        {/* Pending */}
         <Card className="border-border/60 shadow-card overflow-hidden">
-          <div className="p-5 border-b border-border/60 flex items-center justify-between">
+          <div className="p-5 border-b border-border/60 flex items-center justify-between flex-wrap gap-3">
             <div>
               <h2 className="font-display font-semibold flex items-center gap-2">
                 Pending approvals
-                {pending.length > 0 && (
+                {allPending.length > 0 && (
                   <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-                    {pending.length}
+                    {allPending.length}
                   </span>
                 )}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Click a row to view details · use the button to verify
+                {pending.length} shown · click a row to view details
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={fetchAll} className="gap-2">
-              <RefreshCw size={13} /> Refresh
-            </Button>
+            {sharedSearchBar}
           </div>
           <Table>
             <TableHeader>
@@ -879,22 +945,28 @@ function CreatorsPage() {
                   </TableRow>
                 );
               })}
-              {pending.length === 0 && <EmptyRow cols={9} message="No pending approvals." />}
+              {pending.length === 0 && (
+                <EmptyRow cols={9} message={search ? `No pending creators matching "${search}"` : "No pending approvals."} />
+              )}
             </TableBody>
           </Table>
         </Card>
 
+        {/* Verified */}
         <Card className="border-border/60 shadow-card overflow-hidden">
-          <div className="p-5 border-b border-border/60">
-            <h2 className="font-display font-semibold flex items-center gap-2">
-              <ShieldCheck size={16} className="text-green-600" /> Verified creators
-              <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                {verified.length}
-              </span>
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Click any row to view full profile, clients &amp; earnings
-            </p>
+          <div className="p-5 border-b border-border/60 flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="font-display font-semibold flex items-center gap-2">
+                <ShieldCheck size={16} className="text-green-600" /> Verified creators
+                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+                  {allVerified.length}
+                </span>
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                {verified.length} shown · click any row to view full profile
+              </p>
+            </div>
+            {sharedSearchBar}
           </div>
           <Table>
             <TableHeader>
@@ -956,7 +1028,9 @@ function CreatorsPage() {
                   </TableRow>
                 );
               })}
-              {verified.length === 0 && <EmptyRow cols={10} message="No verified creators yet." />}
+              {verified.length === 0 && (
+                <EmptyRow cols={10} message={search ? `No verified creators matching "${search}"` : "No verified creators yet."} />
+              )}
             </TableBody>
           </Table>
         </Card>
@@ -1229,10 +1303,10 @@ function WithdrawalsPage() {
   );
 }
 
-// ── Reports ───────────────────────────────────────────────────────────────────
+// ── Reports Page ──────────────────────────────────────────────────────────────
 
 function ReportsPage() {
-  const [stats, setStats]     = useState<{ revenue: number; avgPrice: number; bookings: number } | null>(null);
+  const [stats,   setStats]   = useState<{ revenue: number; avgPrice: number; bookings: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1247,7 +1321,7 @@ function ReportsPage() {
   }, []);
 
   const cards = [
-    { label: "Total revenue",     value: loading ? "—" : `₹${(stats?.revenue ?? 0).toLocaleString()}` },
+    { label: "Total revenue",     value: loading ? "—" : `₹${(stats?.revenue  ?? 0).toLocaleString()}` },
     { label: "Avg session price", value: loading ? "—" : `₹${(stats?.avgPrice ?? 0).toLocaleString()}` },
     { label: "Total bookings",    value: loading ? "—" : String(stats?.bookings ?? "—") },
     { label: "Refund rate",       value: "0%" },

@@ -34,9 +34,15 @@ const Payment = () => {
 
   const inDashboard = location.pathname.startsWith("/dashboard");
 
+  // ── Load draft from session storage ────────────────────────────────────────
   useEffect(() => {
     const raw = sessionStorage.getItem("myfit:booking");
     if (raw) setDraft(JSON.parse(raw));
+  }, []);
+
+  // ── Preload Razorpay SDK as soon as page mounts ─────────────────────────────
+  useEffect(() => {
+    loadRazorpayScript();
   }, []);
 
   if (!draft) {
@@ -53,31 +59,27 @@ const Payment = () => {
   }
 
   // ── Commission model ────────────────────────────────────────────────────────
-  // draft.price  = base session price (e.g. ₹100)
-  // razorpayFee  = 2% shown to user on top   → ₹2
-  // total        = what user actually pays    → ₹102
-  // myCommission = 20% of base price          → ₹20  (stored in DB as commission)
-  // creatorGets  = base price - myCommission  → ₹80  (= draft.price - commission)
-  // ───────────────────────────────────────────────────────────────────────────
-  const razorpayFee  = Math.round(draft.price * 0.02);  // ₹2  — shown to user
-  const myCommission = Math.round(draft.price * 0.20);  // ₹20 — your earnings
-  const total        = draft.price + razorpayFee;        // ₹102 — user pays
+  const razorpayFee  = Math.round(draft.price * 0.02);
+  const myCommission = Math.round(draft.price * 0.20);
+  const total        = draft.price + razorpayFee;
 
   const pay = async () => {
     setProcessing(true);
 
-    // 1. Load Razorpay SDK
-    const loaded = await loadRazorpayScript();
-    if (!loaded) {
-      toast.error("Failed to load payment gateway. Check your connection.");
-      setProcessing(false);
-      return;
-    }
-
-    // 2. Create order on backend
+    // 1. Load SDK + create order in parallel
     let order: { id: string; amount: number; currency: string };
     try {
-      const res = await paymentService.createOrder(total);
+      const [loaded, res] = await Promise.all([
+        loadRazorpayScript(),
+        paymentService.createOrder(total),
+      ]);
+
+      if (!loaded) {
+        toast.error("Failed to load payment gateway. Check your connection.");
+        setProcessing(false);
+        return;
+      }
+
       order = res.order;
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Could not create order. Try again.");
@@ -85,7 +87,7 @@ const Payment = () => {
       return;
     }
 
-    // 3. Open Razorpay checkout
+    // 2. Open Razorpay checkout
     const options = {
       key:         import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount:      order.amount,
@@ -96,7 +98,6 @@ const Payment = () => {
       prefill:     { name: draft.creatorName },
       theme:       { color: "#6366f1" },
 
-      // ✅ Forces UPI to show on all devices including Android
       config: {
         display: {
           blocks: {
@@ -124,15 +125,11 @@ const Payment = () => {
         razorpay_signature:  string;
       }) => {
         try {
-          // 4. Verify + save booking
-          // amount     = ₹102 (full amount user paid — stored in DB)
-          // commission = ₹20  (your 20% cut — stored in DB)
-          // creator earnings = draft.price - commission = ₹100 - ₹20 = ₹80 ✅
           const data = await paymentService.verifyPayment({
             ...response,
             creatorId:   draft.creatorId,
-            amount:      total,         // ₹102
-            commission:  myCommission,  // ₹20
+            amount:      total,
+            commission:  myCommission,
             sessionType: draft.sessionType ?? "single",
             date:        draft.date  ?? null,
             time:        draft.time  ?? null,
@@ -176,7 +173,6 @@ const Payment = () => {
           </p>
         </div>
 
-        {/* ── After payment ── */}
         {paid ? (
           <div className="rounded-xl border border-green-200 bg-green-50 p-5 space-y-4">
             <p className="font-semibold text-green-800">✅ Booking confirmed!</p>
@@ -193,9 +189,7 @@ const Payment = () => {
               />
               <Button
                 variant="outline"
-                onClick={() =>
-                  navigate(inDashboard ? "/dashboard/bookings" : "/dashboard")
-                }
+                onClick={() => navigate(inDashboard ? "/dashboard/bookings" : "/dashboard")}
               >
                 Go to My Bookings
               </Button>
@@ -231,9 +225,7 @@ const Payment = () => {
           <div>
             <div className="font-semibold text-sm">{draft.creatorName}</div>
             <div className="text-xs text-muted-foreground">
-              {draft.date
-                ? new Date(draft.date).toLocaleDateString()
-                : "Monthly plan"}{" "}
+              {draft.date ? new Date(draft.date).toLocaleDateString() : "Monthly plan"}{" "}
               · {draft.time ?? "—"}
             </div>
           </div>
@@ -255,7 +247,6 @@ const Payment = () => {
           </div>
         </div>
 
-        {/* ── Earnings breakdown ── */}
         <div className="mt-4 pt-4 border-t border-border/60 space-y-1 text-xs text-muted-foreground">
           <div className="flex justify-between">
             <span>Creator receives</span>

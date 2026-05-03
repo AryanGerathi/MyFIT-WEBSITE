@@ -13,7 +13,7 @@ import {
   Wallet, Users, Calendar as CalIcon, TrendingUp,
   Check, IndianRupee, Pencil, Camera, Trash2, Loader2,
   ShieldCheck, Clock, AlertCircle, XCircle, CheckCircle2, History,
-  Building2, CreditCard, BadgeCheck, Lock,
+  Building2, CreditCard, BadgeCheck, Lock,LogOut,
 } from "lucide-react";
 import { useState, useRef, useEffect, useCallback } from "react";
 import { format } from "date-fns";
@@ -405,7 +405,7 @@ function Earnings({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p:
                   </div>
                   <div className="flex items-center gap-6 text-xs text-muted-foreground">
                     <div className="text-right">
-                      <p>MyFit commission (20%)</p>
+                      <p>MyFit Fee(20%)</p>
                       <p className="font-medium text-foreground">₹{commission.toLocaleString()}</p>
                     </div>
                     <div className="text-right">
@@ -913,21 +913,32 @@ function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: 
         )
       )}
 
-      <Card className="p-6 border-border/60 shadow-card">
-        <ProfileImageUpload currentUrl={profileImageUrl} initials={initials} onUploaded={(url) => setProfileImageUrl(url)} />
-        <div className="mt-4 pt-4 border-t border-border/60">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="font-display font-bold text-lg">{name || "—"}</p>
-            {isVerified && (
-              <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
-                <ShieldCheck size={11} /> Verified
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">{storedUser?.email || "—"}</p>
-          <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">Creator</span>
-        </div>
-      </Card>
+<Card className="p-6 border-border/60 shadow-card">
+  <ProfileImageUpload currentUrl={profileImageUrl} initials={initials} onUploaded={(url) => setProfileImageUrl(url)} />
+  <div className="mt-4 pt-4 border-t border-border/60 flex items-start justify-between gap-3 flex-wrap">
+    <div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <p className="font-display font-bold text-lg">{name || "—"}</p>
+        {isVerified && (
+          <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium">
+            <ShieldCheck size={11} /> Verified
+          </span>
+        )}
+      </div>
+      <p className="text-sm text-muted-foreground">{storedUser?.email || "—"}</p>
+      <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium">Creator</span>
+    </div>
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive/40 shrink-0"
+      onClick={() => { authService.clearSession(); window.location.href = "/login"; }}
+    >
+      <LogOut size={14} /> Logout
+    </Button>
+  </div>
+</Card>
 
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-5">Trainer profile</h2>

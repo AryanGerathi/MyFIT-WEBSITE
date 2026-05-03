@@ -29,7 +29,7 @@ export function Navbar() {
     setIsLoggedIn(loggedIn);
     if (loggedIn) {
       const user = authService.getStoredUser();
-      setUserRole(user?.role ?? null);
+      setUserRole((user?.role === "user" || user?.role === "creator") ? user.role : null);
     } else {
       setUserRole(null);
     }

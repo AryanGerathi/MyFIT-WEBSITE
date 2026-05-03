@@ -67,11 +67,12 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
 
 // ─── OTP Screen ───────────────────────────────────────────────────────────────
 function OTPScreen({
-  userId, maskedEmail, returnTo, onSuccess, onBack,
+  userId, maskedEmail, returnTo, purpose, onSuccess, onBack,
 }: {
   userId: string;
   maskedEmail: string;
   returnTo: string;
+  purpose: "signup" | "login";
   onSuccess: () => void;
   onBack: () => void;
 }) {
@@ -91,9 +92,9 @@ function OTPScreen({
     if (otp.length < 6) { toast.error("Please enter the full 6-digit OTP."); return; }
     setLoading(true);
     try {
-      const data = await authService.verifyOTP({ userId, otp, purpose: "signup" });
+      const data = await authService.verifyOTP({ userId, otp, purpose });
       authService.saveSession(data.token, data.user);
-      toast.success("Account created! Welcome 🎉");
+      toast.success(purpose === "signup" ? "Account created! Welcome 🎉" : `Welcome back, ${data.user.name.split(" ")[0]}!`);
       onSuccess();
       const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
       navigate(destination, { replace: true });
@@ -106,7 +107,7 @@ function OTPScreen({
   const handleResend = async () => {
     setResending(true);
     try {
-      const data = await authService.resendOTP({ userId, purpose: "signup" });
+      const data = await authService.resendOTP({ userId, purpose });
       toast.success(data.message);
       setOtp("");
       setCountdown(60);
@@ -139,7 +140,7 @@ function OTPScreen({
       >
         {loading
           ? <><Loader2 size={16} className="animate-spin mr-2" />Verifying…</>
-          : "Verify & Create Account"}
+          : purpose === "signup" ? "Verify & Create Account" : "Verify & Login"}
       </Button>
 
       <div className="text-sm text-muted-foreground">
@@ -158,7 +159,7 @@ function OTPScreen({
       </div>
 
       <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-        ← Back to signup
+        ← Back to {purpose === "signup" ? "signup" : "login"}
       </button>
     </div>
   );
@@ -166,8 +167,6 @@ function OTPScreen({
 
 // ─── Auth Form ────────────────────────────────────────────────────────────────
 function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: string }) {
-  const navigate = useNavigate();
-
   const [screen,      setScreen]      = useState<Screen>("form");
   const [userId,      setUserId]      = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -183,6 +182,11 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
   const [errors,      setErrors]      = useState<Record<string, string>>({});
 
   const clearError = (key: string) => setErrors((prev) => ({ ...prev, [key]: "" }));
+
+  const getMaskedEmail = (email: string) => {
+    const local = email.split("@")[0];
+    return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${email.split("@")[1]}`;
+  };
 
   const validate = (): boolean => {
     const errs: Record<string, string> = {};
@@ -208,16 +212,16 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
       if (mode === "signup") {
         const data = await authService.signup({ name, email, phone, countryCode, password, role });
         setUserId(data.userId);
-        const local = email.split("@")[0];
-        setMaskedEmail(`${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${email.split("@")[1]}`);
+        setMaskedEmail(getMaskedEmail(email));
         toast.success(data.message);
         setScreen("otp");
       } else {
+        // Login also returns OTPStepResponse (userId) — then OTP screen handles token
         const data = await authService.login({ email, password });
-        authService.saveSession(data.token, data.user);
-        toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
-        const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
-        navigate(destination, { replace: true });
+        setUserId(data.userId);
+        setMaskedEmail(getMaskedEmail(email));
+        toast.success(data.message);
+        setScreen("otp");
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -241,8 +245,12 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
   if (screen === "otp") {
     return (
       <OTPScreen
-        userId={userId} maskedEmail={maskedEmail} returnTo={returnTo}
-        onSuccess={() => setScreen("form")} onBack={() => setScreen("form")}
+        userId={userId}
+        maskedEmail={maskedEmail}
+        returnTo={returnTo}
+        purpose={mode === "login" ? "login" : "signup"}
+        onSuccess={() => setScreen("form")}
+        onBack={() => setScreen("form")}
       />
     );
   }
@@ -373,7 +381,7 @@ export default function Auth({ mode }: { mode: Mode }) {
 
       {/* ── Navbar ── */}
       <header className="h-16 shrink-0 border-b border-border/60 bg-background/80 backdrop-blur-md sticky top-0 z-50">
-      <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4 relative">
+        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4 relative">
           {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 shrink-0">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent shadow-glow">
@@ -383,29 +391,29 @@ export default function Auth({ mode }: { mode: Mode }) {
               My<span className="text-accent">Fit</span>
             </span>
           </Link>
-{/* Nav links — centered absolutely, icons-only on mobile */}
-<nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
-  <Button asChild variant="ghost" size="sm">
-    <Link to="/"><Home size={15} /></Link>
-  </Button>
-  <Button asChild variant="ghost" size="sm">
-    <Link to="/explore"><Compass size={15} /></Link>
-  </Button>
-</nav>
 
+          {/* Nav links — centered absolutely, icons-only on mobile */}
+          <nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/"><Home size={15} /></Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/explore"><Compass size={15} /></Link>
+            </Button>
+          </nav>
 
-{/* Auth button — stays right */}
-<div className="ml-auto">
-  {mode === "login" ? (
-    <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-      <Link to="/signup" state={{ returnTo }}>Sign up</Link>
-    </Button>
-  ) : (
-    <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-      <Link to="/login" state={{ returnTo }}>Login</Link>
-    </Button>
-  )}
-</div>
+          {/* Auth button — stays right */}
+          <div className="ml-auto">
+            {mode === "login" ? (
+              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Link to="/signup" state={{ returnTo }}>Sign up</Link>
+              </Button>
+            ) : (
+              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Link to="/login" state={{ returnTo }}>Login</Link>
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 

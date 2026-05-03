@@ -587,6 +587,7 @@ function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 function Profile() {
+  const navigate = useNavigate();
   const user     = authService.getStoredUser();
   const initials = user?.name
     ? user.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2)
@@ -658,7 +659,10 @@ function Profile() {
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" className="bg-accent text-accent-foreground">Save changes</Button>
             <Button type="button" variant="outline"
-              onClick={() => { authService.clearSession(); window.location.href = "/login"; }}>
+               onClick={() => { 
+                authService.clearSession(); 
+                navigate("/login"); 
+              }}>
               Logout
             </Button>
           </div>

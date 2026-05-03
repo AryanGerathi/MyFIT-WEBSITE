@@ -1,10 +1,10 @@
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Dumbbell, Eye, EyeOff, Loader2, ShieldCheck, RotateCcw } from "lucide-react";
+import { Dumbbell, Eye, EyeOff, Loader2, ShieldCheck, RotateCcw, Home, Compass } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
 import { authService, APIError } from "@/services/backendService";
@@ -51,9 +51,7 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
         <input
           key={i}
           ref={(el) => { inputs.current[i] = el; }}
-          type="text"
-          inputMode="numeric"
-          maxLength={1}
+          type="text" inputMode="numeric" maxLength={1}
           value={value[i] || ""}
           onChange={(e) => handleChange(i, e)}
           onKeyDown={(e) => handleKey(i, e)}
@@ -69,16 +67,17 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
 
 // ─── OTP Screen ───────────────────────────────────────────────────────────────
 function OTPScreen({
-  userId, maskedEmail, onSuccess, onBack,
+  userId, maskedEmail, returnTo, onSuccess, onBack,
 }: {
   userId: string;
   maskedEmail: string;
+  returnTo: string;
   onSuccess: () => void;
   onBack: () => void;
 }) {
-  const navigate  = useNavigate();
-  const [otp, setOtp]             = useState("");
-  const [loading, setLoading]     = useState(false);
+  const navigate = useNavigate();
+  const [otp,       setOtp]       = useState("");
+  const [loading,   setLoading]   = useState(false);
   const [resending, setResending] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
@@ -96,13 +95,12 @@ function OTPScreen({
       authService.saveSession(data.token, data.user);
       toast.success("Account created! Welcome 🎉");
       onSuccess();
-      navigate(data.user.role === "creator" ? "/creator-dashboard" : "/dashboard", { replace: true });
+      const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
+      navigate(destination, { replace: true });
     } catch (err) {
       if (err instanceof APIError) { toast.error(err.message); if (err.status === 429) setOtp(""); }
       else toast.error("Cannot connect to server.");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const handleResend = async () => {
@@ -115,9 +113,7 @@ function OTPScreen({
     } catch (err) {
       if (err instanceof APIError) toast.error(err.message);
       else toast.error("Cannot connect to server.");
-    } finally {
-      setResending(false);
-    }
+    } finally { setResending(false); }
   };
 
   return (
@@ -138,15 +134,12 @@ function OTPScreen({
       <OTPInput value={otp} onChange={setOtp} />
 
       <Button
-        onClick={handleVerify}
-        disabled={loading || otp.length < 6}
-        size="lg"
-        className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+        onClick={handleVerify} disabled={loading || otp.length < 6}
+        size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
       >
         {loading
           ? <><Loader2 size={16} className="animate-spin mr-2" />Verifying…</>
-          : "Verify & Create Account"
-        }
+          : "Verify & Create Account"}
       </Button>
 
       <div className="text-sm text-muted-foreground">
@@ -154,22 +147,17 @@ function OTPScreen({
           <p>Resend OTP in <span className="font-medium text-foreground">{countdown}s</span></p>
         ) : (
           <button
-            onClick={handleResend}
-            disabled={resending}
+            onClick={handleResend} disabled={resending}
             className="inline-flex items-center gap-1.5 text-accent font-medium hover:underline disabled:opacity-50"
           >
             {resending
               ? <><Loader2 size={13} className="animate-spin" />Sending…</>
-              : <><RotateCcw size={13} />Resend OTP</>
-            }
+              : <><RotateCcw size={13} />Resend OTP</>}
           </button>
         )}
       </div>
 
-      <button
-        onClick={onBack}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
+      <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
         ← Back to signup
       </button>
     </div>
@@ -177,7 +165,7 @@ function OTPScreen({
 }
 
 // ─── Auth Form ────────────────────────────────────────────────────────────────
-function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
+function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: string }) {
   const navigate = useNavigate();
 
   const [screen,      setScreen]      = useState<Screen>("form");
@@ -228,8 +216,8 @@ function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
         const data = await authService.login({ email, password });
         authService.saveSession(data.token, data.user);
         toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
-        // replace: true so back button can't return to login
-        navigate(data.user.role === "creator" ? "/creator-dashboard" : "/dashboard", { replace: true });
+        const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
+        navigate(destination, { replace: true });
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -244,9 +232,7 @@ function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
       } else {
         toast.error("Cannot connect to server. Is the backend running?");
       }
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const inputCls = (key: string) =>
@@ -255,17 +241,14 @@ function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
   if (screen === "otp") {
     return (
       <OTPScreen
-        userId={userId}
-        maskedEmail={maskedEmail}
-        onSuccess={() => setScreen("form")}
-        onBack={() => setScreen("form")}
+        userId={userId} maskedEmail={maskedEmail} returnTo={returnTo}
+        onSuccess={() => setScreen("form")} onBack={() => setScreen("form")}
       />
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 mt-4" noValidate>
-
       {mode === "signup" && (
         <div>
           <Label htmlFor={`name-${role}`}>Full name</Label>
@@ -362,8 +345,7 @@ function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
           ? <><Loader2 size={16} className="animate-spin mr-2" />Please wait…</>
           : mode === "login"
             ? "Login"
-            : `Create account as ${role === "creator" ? "Creator" : "User"}`
-        }
+            : `Create account as ${role === "creator" ? "Creator" : "User"}`}
       </Button>
     </form>
   );
@@ -371,84 +353,126 @@ function AuthForm({ mode, role }: { mode: Mode; role: Role }) {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 export default function Auth({ mode }: { mode: Mode }) {
-  const [params] = useSearchParams();
-  const navigate = useNavigate();
-  const initialRole: Role = params.get("role") === "creator" ? "creator" : "user";
+  const [params]  = useSearchParams();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
-  // ── Redirect already-logged-in users away from /login and /signup ──────────
+  const initialRole: Role = params.get("role") === "creator" ? "creator" : "user";
+  const returnTo: string  = (location.state as { returnTo?: string })?.returnTo ?? "";
+
   useEffect(() => {
     if (authService.isLoggedIn()) {
       const user = authService.getStoredUser();
-      navigate(
-        user?.role === "creator" ? "/creator-dashboard" : "/dashboard",
-        { replace: true }  // replaces history so back button won't return here
-      );
+      const destination = returnTo || (user?.role === "creator" ? "/creator-dashboard" : "/dashboard");
+      navigate(destination, { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, returnTo]);
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] grid lg:grid-cols-2">
-      <div className="hidden lg:flex relative gradient-hero p-12 text-white items-end">
-        <div className="absolute inset-0 opacity-30" style={{
-          backgroundImage: "radial-gradient(circle at 30% 30%, hsl(222 89% 55% / 0.6), transparent 50%)",
-        }} />
-        <div className="relative">
-          <Link to="/" className="inline-flex items-center gap-2">
-            <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent shadow-glow">
-              <Dumbbell size={18} />
+    <div className="min-h-screen flex flex-col">
+
+      {/* ── Navbar ── */}
+      <header className="h-16 shrink-0 border-b border-border/60 bg-background/80 backdrop-blur-md sticky top-0 z-50">
+        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+          {/* Logo */}
+          <Link to="/" className="inline-flex items-center gap-2 shrink-0">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent shadow-glow">
+              <Dumbbell size={16} className="text-accent-foreground" />
             </span>
-            <span className="font-display font-bold text-2xl">My<span className="text-accent">Fit</span></span>
+            <span className="font-display font-bold text-xl">
+              My<span className="text-accent">Fit</span>
+            </span>
           </Link>
-          <h2 className="font-display font-bold text-4xl mt-12 leading-tight">
-            Your transformation<br />starts here.
-          </h2>
-          <p className="text-white/70 mt-3 max-w-md">
-            Join thousands of users training with India's best fitness creators.
-          </p>
-        </div>
-      </div>
 
-      <div className="flex items-center justify-center p-6 sm:p-12 bg-background min-h-screen lg:min-h-0">
-        <Card className="w-full max-w-md p-8 border-border/60 shadow-card">
-          <h1 className="font-display font-bold text-2xl">
-            {mode === "login" ? "Welcome back" : "Create your account"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === "login"
-              ? "Sign in with your email and password"
-              : "Choose how you want to use MyFit"}
-          </p>
-
-          {mode === "login" ? (
-            <div className="mt-6">
-              <AuthForm mode="login" role="user" />
-            </div>
-          ) : (
-            <Tabs defaultValue={initialRole} className="mt-6">
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="user">As a User</TabsTrigger>
-                <TabsTrigger value="creator">As a Creator</TabsTrigger>
-              </TabsList>
-              {(["user", "creator"] as const).map((role) => (
-                <TabsContent key={role} value={role}>
-                  <AuthForm mode="signup" role={role} />
-                </TabsContent>
-              ))}
-            </Tabs>
-          )}
-
-          <p className="text-sm text-center text-muted-foreground mt-6">
+          {/* Nav links */}
+          <nav className="flex items-center gap-1">
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link to="/"><Home size={15} />Home</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="gap-1.5">
+              <Link to="/explore"><Compass size={15} />Explore</Link>
+            </Button>
+            <div className="w-px h-5 bg-border mx-1" />
             {mode === "login" ? (
-              <>Don't have an account?{" "}
-                <Link to="/signup" className="text-accent font-medium hover:underline">Sign up</Link>
-              </>
+              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Link to="/signup" state={{ returnTo }}>Sign up</Link>
+              </Button>
             ) : (
-              <>Already have an account?{" "}
-                <Link to="/login" className="text-accent font-medium hover:underline">Login</Link>
-              </>
+              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                <Link to="/login" state={{ returnTo }}>Login</Link>
+              </Button>
             )}
-          </p>
-        </Card>
+          </nav>
+        </div>
+      </header>
+
+      {/* ── Two-column layout ── */}
+      <div className="flex-1 grid lg:grid-cols-2">
+
+        {/* Left decorative panel */}
+        <div className="hidden lg:flex relative gradient-hero p-12 text-white items-end">
+          <div className="absolute inset-0 opacity-30" style={{
+            backgroundImage: "radial-gradient(circle at 30% 30%, hsl(222 89% 55% / 0.6), transparent 50%)",
+          }} />
+          <div className="relative">
+            <h2 className="font-display font-bold text-4xl leading-tight">
+              Your transformation<br />starts here.
+            </h2>
+            <p className="text-white/70 mt-3 max-w-md">
+              Join thousands of users training with India's best fitness creators.
+            </p>
+          </div>
+        </div>
+
+        {/* Right form panel */}
+        <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
+          <Card className="w-full max-w-md p-8 border-border/60 shadow-card">
+            <h1 className="font-display font-bold text-2xl">
+              {mode === "login" ? "Welcome back" : "Create your account"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {mode === "login"
+                ? "Sign in with your email and password"
+                : "Choose how you want to use MyFit"}
+            </p>
+
+            {returnTo && (
+              <div className="mt-3 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                You'll be returned to your previous page after {mode === "login" ? "logging in" : "signing up"}.
+              </div>
+            )}
+
+            {mode === "login" ? (
+              <div className="mt-6">
+                <AuthForm mode="login" role="user" returnTo={returnTo} />
+              </div>
+            ) : (
+              <Tabs defaultValue={initialRole} className="mt-6">
+                <TabsList className="grid grid-cols-2 w-full">
+                  <TabsTrigger value="user">As a User</TabsTrigger>
+                  <TabsTrigger value="creator">As a Creator</TabsTrigger>
+                </TabsList>
+                {(["user", "creator"] as const).map((role) => (
+                  <TabsContent key={role} value={role}>
+                    <AuthForm mode="signup" role={role} returnTo={returnTo} />
+                  </TabsContent>
+                ))}
+              </Tabs>
+            )}
+
+            <p className="text-sm text-center text-muted-foreground mt-6">
+              {mode === "login" ? (
+                <>Don't have an account?{" "}
+                  <Link to="/signup" state={{ returnTo }} className="text-accent font-medium hover:underline">Sign up</Link>
+                </>
+              ) : (
+                <>Already have an account?{" "}
+                  <Link to="/login" state={{ returnTo }} className="text-accent font-medium hover:underline">Login</Link>
+                </>
+              )}
+            </p>
+          </Card>
+        </div>
       </div>
     </div>
   );

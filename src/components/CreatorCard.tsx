@@ -1,11 +1,11 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { getSavedIds, toggleSaved } from "@/lib/savedCreators";
-import { BadgeCheck, Heart } from "lucide-react";
+import { BadgeCheck, Heart, Lock } from "lucide-react";
 import { RatingStars } from "./RatingStars";
-import type { PublicCreator } from "@/services/backendService";
+import { authService, type PublicCreator } from "@/services/backendService";
 import { useState } from "react";
 
 interface CreatorCardProps {
@@ -15,6 +15,7 @@ interface CreatorCardProps {
 
 export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const id           = creator._id;
   const name         = creator.name;
@@ -33,11 +34,23 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
 
   const [saved, setSaved] = useState(() => getSavedIds().includes(id));
 
+  const isLoggedIn = authService.isLoggedIn();
+
+  const goToLogin = () =>
+    navigate("/login", { state: { returnTo: location.pathname } });
+
   const handleToggleSave = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const nowSaved = toggleSaved(id);
-    setSaved(nowSaved);
+    if (!isLoggedIn) { goToLogin(); return; }
+    setSaved(toggleSaved(id));
+  };
+
+  const handleBook = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isLoggedIn) { goToLogin(); return; }
+    navigate(profilePath);
   };
 
   return (
@@ -46,15 +59,11 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
         <div className="aspect-[4/3] overflow-hidden bg-muted flex items-center justify-center">
           {imageUrl ? (
             <img
-              src={imageUrl}
-              alt={name}
-              loading="lazy"
+              src={imageUrl} alt={name} loading="lazy"
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
-            <span className="font-display font-bold text-2xl sm:text-4xl text-accent select-none">
-              {initials}
-            </span>
+            <span className="font-display font-bold text-2xl sm:text-4xl text-accent select-none">{initials}</span>
           )}
         </div>
         <button
@@ -68,23 +77,17 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
       </Link>
 
       <div className="p-2.5 sm:p-5 space-y-2 sm:space-y-3">
-        {/* Name + badge row */}
+        {/* Name + badge */}
         <div className="flex items-start justify-between gap-1">
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <h3 className="font-display font-semibold text-sm sm:text-lg leading-tight truncate">
-                {name}
-              </h3>
+              <h3 className="font-display font-semibold text-sm sm:text-lg leading-tight truncate">{name}</h3>
               {verified && <BadgeCheck size={13} className="text-accent shrink-0" />}
             </div>
-            <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1">
-              {subtitle}
-            </p>
+            <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1">{subtitle}</p>
           </div>
           {specialty && (
-            <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 font-medium text-xs">
-              {specialty}
-            </Badge>
+            <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 font-medium text-xs">{specialty}</Badge>
           )}
         </div>
 
@@ -93,25 +96,15 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
           <div className="flex items-center gap-1">
             <RatingStars rating={rating} />
             <span className="text-[11px] sm:text-sm font-medium">{rating > 0 ? rating : "New"}</span>
-            {reviews > 0 && (
-              <span className="text-[10px] sm:text-xs text-muted-foreground">({reviews})</span>
-            )}
+            {reviews > 0 && <span className="text-[10px] sm:text-xs text-muted-foreground">({reviews})</span>}
           </div>
           <div className="text-left sm:text-right">
             {dailyPrice > 0 ? (
-              <>
-                <span className="font-display font-bold text-sm sm:text-lg text-primary">
-                  ₹{dailyPrice.toLocaleString()}
-                </span>
-                <span className="text-[10px] sm:text-xs text-muted-foreground">/session</span>
-              </>
+              <><span className="font-display font-bold text-sm sm:text-lg text-primary">₹{dailyPrice.toLocaleString()}</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">/session</span></>
             ) : monthlyPrice > 0 ? (
-              <>
-                <span className="font-display font-bold text-sm sm:text-lg text-primary">
-                  ₹{monthlyPrice.toLocaleString()}
-                </span>
-                <span className="text-[10px] sm:text-xs text-muted-foreground">/mo</span>
-              </>
+              <><span className="font-display font-bold text-sm sm:text-lg text-primary">₹{monthlyPrice.toLocaleString()}</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">/mo</span></>
             ) : (
               <span className="text-[10px] sm:text-xs text-muted-foreground italic">TBD</span>
             )}
@@ -124,13 +117,12 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
             <Button
               size="sm"
               className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
-              onClick={() => navigate(profilePath)}
+              onClick={handleBook}
             >
-              Book
+              {!isLoggedIn && <Lock size={11} className="mr-1" />} Book
             </Button>
             <Button
-              size="sm"
-              variant="outline"
+              size="sm" variant="outline"
               className="flex-1 text-xs sm:text-sm h-8 sm:h-9"
               onClick={() => navigate(profilePath)}
             >
@@ -139,10 +131,10 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
           </div>
         ) : (
           <Button
-            asChild
-            size="sm"
+            asChild size="sm"
             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
           >
+            {/* View Profile is always accessible — auth guard is on the booking action inside the profile */}
             <Link to={profilePath}>View Profile</Link>
           </Button>
         )}

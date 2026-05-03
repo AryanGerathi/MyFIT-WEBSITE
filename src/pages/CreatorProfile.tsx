@@ -7,12 +7,12 @@ import { RatingStars } from "@/components/RatingStars";
 import {
   BadgeCheck, Award, Sparkles, Loader2, AlertCircle,
   Clock, Heart, CheckCircle2, CalendarDays, Info,
-  Share2, Copy, Check,
+  Share2, Check, Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { reviews } from "@/data/mock";
-import { creatorService, type PublicCreator } from "@/services/backendService";
+import { creatorService, authService, type PublicCreator } from "@/services/backendService";
 import { getSavedIds, toggleSaved } from "@/lib/savedCreators";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -26,41 +26,45 @@ function ShareButton({ name }: { name: string }) {
   const url = window.location.href;
 
   const handleShare = async () => {
-    // Use native share sheet on mobile if available
     if (navigator.share) {
       try {
-        await navigator.share({
-          title: `${name} — Trainer Profile`,
-          text:  `Check out ${name}'s trainer profile!`,
-          url,
-        });
+        await navigator.share({ title: `${name} — Trainer Profile`, text: `Check out ${name}'s trainer profile!`, url });
         return;
-      } catch {
-        // user cancelled native share — fall through to clipboard
-      }
+      } catch { /* cancelled */ }
     }
-    // Fallback: copy to clipboard
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       toast.success("Profile link copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error("Could not copy link");
-    }
+    } catch { toast.error("Could not copy link"); }
   };
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      onClick={handleShare}
-      className="flex items-center gap-1.5 transition-colors shrink-0"
-    >
-      {copied
-        ? <><Check size={15} className="text-green-600" /> Copied!</>
-        : <><Share2 size={15} /> Share</>}
+    <Button variant="outline" size="sm" onClick={handleShare} className="flex items-center gap-1.5 transition-colors shrink-0">
+      {copied ? <><Check size={15} className="text-green-600" /> Copied!</> : <><Share2 size={15} /> Share</>}
     </Button>
+  );
+}
+
+// ── Auth Guard Banner ─────────────────────────────────────────────────────────
+
+function AuthGuardBanner({ onLogin }: { onLogin: () => void }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-5 flex flex-col sm:flex-row items-center gap-4">
+      <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center shrink-0">
+        <Lock size={18} className="text-amber-600 dark:text-amber-400" />
+      </div>
+      <div className="flex-1 text-center sm:text-left">
+        <p className="font-semibold text-sm text-amber-800 dark:text-amber-300">Login required to book a session</p>
+        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+          Create a free account or sign in to book sessions with this trainer.
+        </p>
+      </div>
+      <Button size="sm" onClick={onLogin} className="bg-amber-500 hover:bg-amber-600 text-white shrink-0">
+        Login / Sign up
+      </Button>
+    </div>
   );
 }
 
@@ -76,7 +80,6 @@ const CreatorProfile = () => {
   const [error,         setError]         = useState<string | null>(null);
   const [saved,         setSaved]         = useState(false);
   const [sessionType,   setSessionType]   = useState<SessionType>("single");
-
   const [singleDate,    setSingleDate]    = useState<Date | undefined>(new Date());
   const [slot,          setSlot]          = useState<string | null>(null);
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
@@ -85,6 +88,11 @@ const CreatorProfile = () => {
   const inDashboard = location.pathname.startsWith("/dashboard");
   const bookingPath = inDashboard ? "/dashboard/booking" : "/booking";
   const explorePath = inDashboard ? "/dashboard/find-creators" : "/explore";
+
+  // ── Auth ────────────────────────────────────────────────────────────────────
+  const isLoggedIn = authService.isLoggedIn();
+
+  const goToLogin = () => navigate("/login", { state: { returnTo: location.pathname } });
 
   useEffect(() => {
     if (!id) return;
@@ -120,6 +128,7 @@ const CreatorProfile = () => {
       : 0;
 
   const handleSave = () => {
+    if (!isLoggedIn) { goToLogin(); return; }
     if (!id) return;
     const nowSaved = toggleSaved(id);
     setSaved(nowSaved);
@@ -127,77 +136,53 @@ const CreatorProfile = () => {
   };
 
   const book = () => {
+    // ── Auth guard ──────────────────────────────────────────────────────────
+    if (!isLoggedIn) { goToLogin(); return; }
     if (!creator) return;
 
     if (sessionType === "single") {
-      if (!singleDate || !slot) {
-        toast.error("Please select a date and time slot");
-        return;
-      }
+      if (!singleDate || !slot) { toast.error("Please select a date and time slot"); return; }
       navigate(bookingPath, {
         state: {
-          creatorId:    creator._id,
-          creatorName:  name,
-          creatorImage: imageUrl,
-          price:        dailyPrice,
-          sessionType:  "single",
-          prefillDate:  singleDate.toISOString(),
-          prefillTime:  slot,
-          timeSlots,
+          creatorId: creator._id, creatorName: name, creatorImage: imageUrl,
+          price: dailyPrice, sessionType: "single",
+          prefillDate: singleDate.toISOString(), prefillTime: slot, timeSlots,
         },
       });
     } else {
-      if (!monthlyPrice) {
-        toast.error("Monthly plan not available");
-        return;
-      }
+      if (!monthlyPrice) { toast.error("Monthly plan not available"); return; }
       if (monthlySessions > 0 && selectedDates.length < monthlySessions) {
-        toast.error(`Please select all ${monthlySessions} session dates`);
-        return;
+        toast.error(`Please select all ${monthlySessions} session dates`); return;
       }
-      if (timeSlots.length > 0 && !monthlySlot) {
-        toast.error("Please select a preferred time slot");
-        return;
-      }
+      if (timeSlots.length > 0 && !monthlySlot) { toast.error("Please select a preferred time slot"); return; }
       navigate(bookingPath, {
         state: {
-          creatorId:      creator._id,
-          creatorName:    name,
-          creatorImage:   imageUrl,
-          price:          monthlyPrice,
-          sessionType:    "monthly",
-          sessionDates:   selectedDates.map((d) => d.toISOString()),
-          prefillTime:    monthlySlot,
-          monthlySessions,
-          timeSlots,
+          creatorId: creator._id, creatorName: name, creatorImage: imageUrl,
+          price: monthlyPrice, sessionType: "monthly",
+          sessionDates: selectedDates.map((d) => d.toISOString()),
+          prefillTime: monthlySlot, monthlySessions, timeSlots,
         },
       });
     }
   };
 
-  const singleBookDisabled =
-    !slot || !singleDate || timeSlots.length === 0;
-
-  const monthlyBookDisabled =
+  // If not logged in, never disable the button — let them click & get redirected
+  const singleBookDisabled  = isLoggedIn && (!slot || !singleDate || timeSlots.length === 0);
+  const monthlyBookDisabled = isLoggedIn && (
     !monthlyPrice ||
     (monthlySessions > 0 && selectedDates.length < monthlySessions) ||
-    (timeSlots.length > 0 && !monthlySlot);
+    (timeSlots.length > 0 && !monthlySlot)
+  );
 
   const bookButtonLabel = () => {
+    if (!isLoggedIn) return "Login to Book";
     if (sessionType === "monthly") {
       if (monthlySessions > 0 && selectedDates.length < monthlySessions)
-        return `Select ${monthlySessions - selectedDates.length} more date${
-          monthlySessions - selectedDates.length > 1 ? "s" : ""
-        }`;
-      if (timeSlots.length > 0 && !monthlySlot)
-        return "Select a time slot";
-      return monthlyPrice > 0
-        ? `Book Monthly Plan — ₹${monthlyPrice.toLocaleString()}/mo`
-        : "Monthly plan unavailable";
+        return `Select ${monthlySessions - selectedDates.length} more date${monthlySessions - selectedDates.length > 1 ? "s" : ""}`;
+      if (timeSlots.length > 0 && !monthlySlot) return "Select a time slot";
+      return monthlyPrice > 0 ? `Book Monthly Plan — ₹${monthlyPrice.toLocaleString()}/mo` : "Monthly plan unavailable";
     }
-    return dailyPrice > 0
-      ? `Book Session — ₹${dailyPrice.toLocaleString()}`
-      : "Book Session";
+    return dailyPrice > 0 ? `Book Session — ₹${dailyPrice.toLocaleString()}` : "Book Session";
   };
 
   if (loading) {
@@ -215,27 +200,17 @@ const CreatorProfile = () => {
         <Card className="p-10 flex flex-col items-center gap-3 text-center border-destructive/30">
           <AlertCircle size={32} className="text-destructive" />
           <p className="font-semibold">{error ?? "Trainer not found"}</p>
-          <Button variant="outline" onClick={() => navigate(explorePath)}>
-            Back to explore
-          </Button>
+          <Button variant="outline" onClick={() => navigate(explorePath)}>Back to explore</Button>
         </Card>
       </div>
     );
   }
 
   const TimeSlotPicker = ({
-    value,
-    onChange,
-    label = "Available time slots",
-  }: {
-    value: string | null;
-    onChange: (t: string) => void;
-    label?: string;
-  }) => (
+    value, onChange, label = "Available time slots",
+  }: { value: string | null; onChange: (t: string) => void; label?: string }) => (
     <div>
-      <h3 className="font-semibold text-sm mb-2 text-muted-foreground uppercase tracking-wide">
-        {label}
-      </h3>
+      <h3 className="font-semibold text-sm mb-2 text-muted-foreground uppercase tracking-wide">{label}</h3>
       {timeSlots.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-muted-foreground border border-dashed rounded-lg">
           <Clock size={24} className="opacity-40" />
@@ -247,11 +222,8 @@ const CreatorProfile = () => {
             <Button
               key={t}
               variant={value === t ? "default" : "outline"}
-              className={cn(
-                "transition-colors",
-                value === t && "bg-accent text-accent-foreground hover:bg-accent/90"
-              )}
-              onClick={() => onChange(t)}
+              className={cn("transition-colors", value === t && "bg-accent text-accent-foreground hover:bg-accent/90")}
+              onClick={() => { if (!isLoggedIn) { goToLogin(); return; } onChange(t); }}
             >
               {t}
             </Button>
@@ -268,11 +240,9 @@ const CreatorProfile = () => {
       <Card className="overflow-hidden border-border/60 shadow-card">
         <div className="grid md:grid-cols-[280px_1fr] gap-0">
           <div className="aspect-square md:aspect-auto bg-muted flex items-center justify-center">
-            {imageUrl ? (
-              <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="font-display font-bold text-6xl text-accent select-none">{initials}</span>
-            )}
+            {imageUrl
+              ? <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+              : <span className="font-display font-bold text-6xl text-accent select-none">{initials}</span>}
           </div>
           <div className="p-6 lg:p-8">
             <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -281,15 +251,11 @@ const CreatorProfile = () => {
                 {verified && <BadgeCheck className="text-accent" />}
                 {specialty && <Badge variant="secondary">{specialty}</Badge>}
               </div>
-              {/* Save + Share buttons */}
               <div className="flex items-center gap-2 shrink-0">
                 <ShareButton name={name} />
                 <Button
                   variant="outline" size="sm" onClick={handleSave}
-                  className={cn(
-                    "flex items-center gap-1.5 transition-colors",
-                    saved && "border-rose-400 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
-                  )}
+                  className={cn("flex items-center gap-1.5 transition-colors", saved && "border-rose-400 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20")}
                 >
                   <Heart size={15} className={cn("transition-all", saved && "fill-rose-500 text-rose-500")} />
                   {saved ? "Saved" : "Save"}
@@ -301,9 +267,7 @@ const CreatorProfile = () => {
               <div className="flex items-center gap-1.5">
                 <RatingStars rating={rating} />
                 <span className="font-semibold">{rating > 0 ? rating : "New"}</span>
-                {reviewCount > 0 && (
-                  <span className="text-sm text-muted-foreground">({reviewCount} reviews)</span>
-                )}
+                {reviewCount > 0 && <span className="text-sm text-muted-foreground">({reviewCount} reviews)</span>}
               </div>
             </div>
             {bio && <p className="mt-4 text-foreground/80 leading-relaxed">{bio}</p>}
@@ -333,6 +297,9 @@ const CreatorProfile = () => {
         </div>
       </Card>
 
+      {/* AUTH GUARD BANNER — only when not logged in */}
+      {!isLoggedIn && <AuthGuardBanner onLogin={goToLogin} />}
+
       {/* SESSION TYPE SELECTOR */}
       <div>
         <h2 className="font-display font-semibold text-xl mb-3">Choose a plan</h2>
@@ -341,22 +308,16 @@ const CreatorProfile = () => {
             onClick={() => { setSessionType("single"); setSlot(null); }}
             className={cn(
               "relative text-left rounded-xl border-2 p-4 transition-all",
-              sessionType === "single"
-                ? "border-accent bg-accent/5"
-                : "border-border/60 bg-card hover:border-border"
+              sessionType === "single" ? "border-accent bg-accent/5" : "border-border/60 bg-card hover:border-border"
             )}
           >
-            {sessionType === "single" && (
-              <CheckCircle2 size={18} className="absolute top-3 right-3 text-accent" />
-            )}
+            {sessionType === "single" && <CheckCircle2 size={18} className="absolute top-3 right-3 text-accent" />}
             <div className="font-semibold text-base">Single session</div>
             <div className="text-2xl font-display font-bold text-primary mt-1">
               {dailyPrice > 0 ? `₹${dailyPrice.toLocaleString()}` : "TBD"}
               <span className="text-sm font-normal text-muted-foreground ml-1">/ session</span>
             </div>
-            <div className="text-xs text-muted-foreground mt-1">
-              Pick any available date & time slot
-            </div>
+            <div className="text-xs text-muted-foreground mt-1">Pick any available date & time slot</div>
           </button>
 
           <button
@@ -365,14 +326,10 @@ const CreatorProfile = () => {
             className={cn(
               "relative text-left rounded-xl border-2 p-4 transition-all",
               !monthlyPrice && "opacity-50 cursor-not-allowed",
-              sessionType === "monthly"
-                ? "border-accent bg-accent/5"
-                : "border-border/60 bg-card hover:border-border"
+              sessionType === "monthly" ? "border-accent bg-accent/5" : "border-border/60 bg-card hover:border-border"
             )}
           >
-            {sessionType === "monthly" && (
-              <CheckCircle2 size={18} className="absolute top-3 right-3 text-accent" />
-            )}
+            {sessionType === "monthly" && <CheckCircle2 size={18} className="absolute top-3 right-3 text-accent" />}
             {savingsPercent > 0 && sessionType !== "monthly" && (
               <Badge className="absolute top-3 right-3 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 text-xs">
                 Save {savingsPercent}%
@@ -384,9 +341,7 @@ const CreatorProfile = () => {
               <span className="text-sm font-normal text-muted-foreground ml-1">/ month</span>
             </div>
             <div className="text-xs text-muted-foreground mt-1">
-              {monthlySessions > 0
-                ? `${monthlySessions} sessions — pick your own dates`
-                : "Contact trainer for details"}
+              {monthlySessions > 0 ? `${monthlySessions} sessions — pick your own dates` : "Contact trainer for details"}
             </div>
           </button>
         </div>
@@ -398,25 +353,23 @@ const CreatorProfile = () => {
           <Card className="p-6 border-border/60 shadow-card">
             <h2 className="font-display font-semibold text-xl mb-4">Pick a date</h2>
             <DayPicker
-              mode="single"
-              selected={singleDate}
-              onSelect={setSingleDate}
-              disabled={{ before: new Date() }}
-              className="pointer-events-auto"
+              mode="single" selected={singleDate} onSelect={setSingleDate}
+              disabled={{ before: new Date() }} className="pointer-events-auto"
             />
           </Card>
-
           <Card className="p-6 border-border/60 shadow-card flex flex-col gap-6">
             <div>
               <h2 className="font-display font-semibold text-xl mb-4">Available time slots</h2>
               <TimeSlotPicker value={slot} onChange={setSlot} />
             </div>
             <Button
-              onClick={book}
-              size="lg"
-              disabled={singleBookDisabled}
-              className="w-full mt-auto bg-accent hover:bg-accent/90 text-accent-foreground disabled:opacity-50"
+              onClick={book} size="lg" disabled={singleBookDisabled}
+              className={cn(
+                "w-full mt-auto text-white disabled:opacity-50",
+                !isLoggedIn ? "bg-amber-500 hover:bg-amber-600" : "bg-accent hover:bg-accent/90 text-accent-foreground"
+              )}
             >
+              {!isLoggedIn && <Lock size={15} className="mr-2" />}
               {bookButtonLabel()}
             </Button>
           </Card>
@@ -428,50 +381,35 @@ const CreatorProfile = () => {
             <div className="flex items-center gap-2 mb-4">
               <div className="flex gap-1">
                 {Array.from({ length: monthlySessions }).map((_, i) => (
-                  <div
-                    key={i}
-                    className={cn(
-                      "h-2 rounded-full transition-all duration-300",
-                      i < selectedDates.length ? "bg-accent w-5" : "bg-border w-2"
-                    )}
-                  />
+                  <div key={i} className={cn("h-2 rounded-full transition-all duration-300", i < selectedDates.length ? "bg-accent w-5" : "bg-border w-2")} />
                 ))}
               </div>
-              <span className="text-sm text-muted-foreground">
-                {selectedDates.length} / {monthlySessions} selected
-              </span>
+              <span className="text-sm text-muted-foreground">{selectedDates.length} / {monthlySessions} selected</span>
             </div>
             <div className="flex items-start gap-1.5 text-xs text-muted-foreground mb-3 bg-muted/50 rounded-lg p-2">
               <Info size={12} className="mt-0.5 shrink-0" />
-              <span>
-                Tap dates to select your {monthlySessions} preferred session days. Tap again to deselect.
-              </span>
+              <span>Tap dates to select your {monthlySessions} preferred session days. Tap again to deselect.</span>
             </div>
             <DayPicker
-              mode="multiple"
-              selected={selectedDates}
+              mode="multiple" selected={selectedDates}
               onSelect={(days) => {
+                if (!isLoggedIn) { goToLogin(); return; }
                 if (!days) { setSelectedDates([]); return; }
                 if (monthlySessions > 0 && days.length > monthlySessions) {
-                  toast.error(`You can only select ${monthlySessions} session dates`);
-                  return;
+                  toast.error(`You can only select ${monthlySessions} session dates`); return;
                 }
                 setSelectedDates(days);
               }}
-              disabled={{ before: new Date() }}
-              className="pointer-events-auto"
+              disabled={{ before: new Date() }} className="pointer-events-auto"
             />
           </Card>
-
           <Card className="p-6 border-border/60 shadow-card flex flex-col gap-5">
             <div>
               <h2 className="font-display font-semibold text-xl mb-4">Monthly plan summary</h2>
               <div className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Plan price</span>
-                  <span className="font-semibold">
-                    {monthlyPrice > 0 ? `₹${monthlyPrice.toLocaleString()}/mo` : "—"}
-                  </span>
+                  <span className="font-semibold">{monthlyPrice > 0 ? `₹${monthlyPrice.toLocaleString()}/mo` : "—"}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Sessions included</span>
@@ -480,72 +418,45 @@ const CreatorProfile = () => {
                 {savingsPercent > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">You save</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                      {savingsPercent}% vs per-session
-                    </span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{savingsPercent}% vs per-session</span>
                   </div>
                 )}
               </div>
             </div>
-
             <div>
               <div className="flex items-center gap-1.5 mb-2 text-sm font-medium">
-                <CalendarDays size={14} />
-                Your selected dates
+                <CalendarDays size={14} /> Your selected dates
               </div>
               {selectedDates.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">
-                  No dates selected yet — pick from the calendar
-                </p>
+                <p className="text-xs text-muted-foreground italic">No dates selected yet — pick from the calendar</p>
               ) : (
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                  {[...selectedDates]
-                    .sort((a, b) => a.getTime() - b.getTime())
-                    .map((d, i) => (
-                      <div
-                        key={d.toISOString()}
-                        className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-3 py-1.5"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-accent w-5 text-center">
-                            #{i + 1}
-                          </span>
-                          <span>
-                            {d.toLocaleDateString("en-IN", {
-                              weekday: "short", day: "numeric", month: "short",
-                            })}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() =>
-                            setSelectedDates((prev) =>
-                              prev.filter((x) => x.toDateString() !== d.toDateString())
-                            )
-                          }
-                          className="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          Remove
-                        </button>
+                  {[...selectedDates].sort((a, b) => a.getTime() - b.getTime()).map((d, i) => (
+                    <div key={d.toISOString()} className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-3 py-1.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-accent w-5 text-center">#{i + 1}</span>
+                        <span>{d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}</span>
                       </div>
-                    ))}
+                      <button
+                        onClick={() => setSelectedDates((prev) => prev.filter((x) => x.toDateString() !== d.toDateString()))}
+                        className="text-xs text-muted-foreground hover:text-destructive transition-colors"
+                      >Remove</button>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
-
             <div className="border-t border-border/40 pt-4">
-              <TimeSlotPicker
-                value={monthlySlot}
-                onChange={setMonthlySlot}
-                label="Preferred time slot (applies to all sessions)"
-              />
+              <TimeSlotPicker value={monthlySlot} onChange={setMonthlySlot} label="Preferred time slot (applies to all sessions)" />
             </div>
-
             <Button
-              onClick={book}
-              size="lg"
-              disabled={monthlyBookDisabled}
-              className="w-full mt-auto bg-accent hover:bg-accent/90 text-accent-foreground disabled:opacity-50"
+              onClick={book} size="lg" disabled={monthlyBookDisabled}
+              className={cn(
+                "w-full mt-auto text-white disabled:opacity-50",
+                !isLoggedIn ? "bg-amber-500 hover:bg-amber-600" : "bg-accent hover:bg-accent/90 text-accent-foreground"
+              )}
             >
+              {!isLoggedIn && <Lock size={15} className="mr-2" />}
               {bookButtonLabel()}
             </Button>
           </Card>
@@ -556,9 +467,7 @@ const CreatorProfile = () => {
       <div>
         <h2 className="font-display font-bold text-2xl mb-5">Reviews</h2>
         {reviews.length === 0 ? (
-          <Card className="p-10 text-center text-muted-foreground border-border/60">
-            No reviews yet for this trainer.
-          </Card>
+          <Card className="p-10 text-center text-muted-foreground border-border/60">No reviews yet for this trainer.</Card>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {reviews.map((r) => (

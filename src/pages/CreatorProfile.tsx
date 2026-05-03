@@ -7,12 +7,15 @@ import { RatingStars } from "@/components/RatingStars";
 import {
   BadgeCheck, Award, Sparkles, Loader2, AlertCircle,
   Clock, Heart, CheckCircle2, CalendarDays, Info,
-  Share2, Check, Lock,
+  Share2, Check, Lock, Star,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { format } from "date-fns";
 import { toast } from "sonner";
-import { reviews } from "@/data/mock";
-import { creatorService, authService, type PublicCreator } from "@/services/backendService";
+import {
+  creatorService, authService, reviewService,
+  type PublicCreator, type Review,
+} from "@/services/backendService";
 import { getSavedIds, toggleSaved } from "@/lib/savedCreators";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
@@ -85,15 +88,19 @@ const CreatorProfile = () => {
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const [monthlySlot,   setMonthlySlot]   = useState<string | null>(null);
 
+  // ── Reviews state ───────────────────────────────────────────────────────────
+  const [liveReviews,    setLiveReviews]    = useState<Review[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [avgRating,      setAvgRating]      = useState(0);
+
   const inDashboard = location.pathname.startsWith("/dashboard");
   const bookingPath = inDashboard ? "/dashboard/booking" : "/booking";
   const explorePath = inDashboard ? "/dashboard/find-creators" : "/explore";
 
-  // ── Auth ────────────────────────────────────────────────────────────────────
   const isLoggedIn = authService.isLoggedIn();
+  const goToLogin  = () => navigate("/login", { state: { returnTo: location.pathname } });
 
-  const goToLogin = () => navigate("/login", { state: { returnTo: location.pathname } });
-
+  // ── Load creator ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -108,6 +115,19 @@ const CreatorProfile = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // ── Load live reviews ───────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return;
+    setReviewsLoading(true);
+    reviewService.getCreatorReviews(id)
+      .then(({ reviews: r, averageRating }) => {
+        setLiveReviews(r);
+        setAvgRating(averageRating);
+      })
+      .catch(() => {})
+      .finally(() => setReviewsLoading(false));
+  }, [id]);
+
   const imageUrl        = creator?.profileImage?.url ?? "";
   const name            = creator?.name ?? "";
   const specialty       = creator?.creatorProfile?.specialization ?? "";
@@ -115,8 +135,8 @@ const CreatorProfile = () => {
   const dailyPrice      = creator?.creatorProfile?.dailyPrice ?? 0;
   const monthlyPrice    = creator?.creatorProfile?.monthlyPrice ?? 0;
   const monthlySessions = creator?.creatorProfile?.monthlySessions ?? 0;
-  const rating          = creator?.creatorProfile?.rating ?? 0;
-  const reviewCount     = creator?.creatorProfile?.reviews ?? 0;
+  const rating          = avgRating || (creator?.creatorProfile?.rating ?? 0);
+  const reviewCount     = liveReviews.length || (creator?.creatorProfile?.reviews ?? 0);
   const verified        = creator?.creatorProfile?.verified ?? false;
   const timeSlots       = creator?.creatorProfile?.timeSlots ?? [];
 
@@ -136,7 +156,6 @@ const CreatorProfile = () => {
   };
 
   const book = () => {
-    // ── Auth guard ──────────────────────────────────────────────────────────
     if (!isLoggedIn) { goToLogin(); return; }
     if (!creator) return;
 
@@ -166,7 +185,6 @@ const CreatorProfile = () => {
     }
   };
 
-  // If not logged in, never disable the button — let them click & get redirected
   const singleBookDisabled  = isLoggedIn && (!slot || !singleDate || timeSlots.length === 0);
   const monthlyBookDisabled = isLoggedIn && (
     !monthlyPrice ||
@@ -266,8 +284,10 @@ const CreatorProfile = () => {
             <div className="flex items-center gap-4 mt-3 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <RatingStars rating={rating} />
-                <span className="font-semibold">{rating > 0 ? rating : "New"}</span>
-                {reviewCount > 0 && <span className="text-sm text-muted-foreground">({reviewCount} reviews)</span>}
+                <span className="font-semibold">{rating > 0 ? rating.toFixed(1) : "New"}</span>
+                {reviewCount > 0 && (
+                  <span className="text-sm text-muted-foreground">({reviewCount} review{reviewCount !== 1 ? "s" : ""})</span>
+                )}
               </div>
             </div>
             {bio && <p className="mt-4 text-foreground/80 leading-relaxed">{bio}</p>}
@@ -297,7 +317,7 @@ const CreatorProfile = () => {
         </div>
       </Card>
 
-      {/* AUTH GUARD BANNER — only when not logged in */}
+      {/* AUTH GUARD BANNER */}
       {!isLoggedIn && <AuthGuardBanner onLogin={goToLogin} />}
 
       {/* SESSION TYPE SELECTOR */}
@@ -465,18 +485,76 @@ const CreatorProfile = () => {
 
       {/* REVIEWS */}
       <div>
-        <h2 className="font-display font-bold text-2xl mb-5">Reviews</h2>
-        {reviews.length === 0 ? (
-          <Card className="p-10 text-center text-muted-foreground border-border/60">No reviews yet for this trainer.</Card>
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
+          <h2 className="font-display font-bold text-2xl">Reviews</h2>
+          {!reviewsLoading && liveReviews.length > 0 && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-0.5">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Star
+                    key={i}
+                    size={16}
+                    className={i < Math.round(avgRating) ? "fill-amber-400 text-amber-400" : "text-border"}
+                  />
+                ))}
+              </div>
+              <span className="font-semibold">{avgRating.toFixed(1)}</span>
+              <span className="text-sm text-muted-foreground">
+                ({liveReviews.length} review{liveReviews.length !== 1 ? "s" : ""})
+              </span>
+            </div>
+          )}
+        </div>
+
+        {reviewsLoading ? (
+          <div className="flex items-center gap-2 text-muted-foreground py-6">
+            <Loader2 className="animate-spin" size={16} />
+            <span className="text-sm">Loading reviews…</span>
+          </div>
+        ) : liveReviews.length === 0 ? (
+          <Card className="p-10 text-center text-muted-foreground border-border/60">
+            <Star size={28} className="mx-auto mb-3 opacity-20" />
+            <p className="font-medium">No reviews yet</p>
+            <p className="text-sm mt-1">Be the first to review this trainer after your session.</p>
+          </Card>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
-            {reviews.map((r) => (
-              <Card key={r.id} className="p-5 border-border/60 shadow-card">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold">{r.user}</div>
-                  <span className="text-xs text-muted-foreground">{r.date}</span>
+            {liveReviews.map((r) => (
+              <Card key={r._id} className="p-5 border-border/60 shadow-card">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    {/* Avatar */}
+                    <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0 overflow-hidden">
+                      {r.userId.profileImage?.url ? (
+                        <img
+                          src={r.userId.profileImage.url}
+                          alt={r.userId.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xs font-bold text-accent">
+                          {r.userId.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-semibold text-sm">{r.userId.name}</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    {format(new Date(r.createdAt), "PP")}
+                  </span>
                 </div>
-                <RatingStars rating={r.rating} className="mt-1" />
+
+                {/* Stars */}
+                <div className="flex items-center gap-0.5 mt-2.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      size={14}
+                      className={i < r.rating ? "fill-amber-400 text-amber-400" : "text-border"}
+                    />
+                  ))}
+                </div>
+
                 <p className="text-sm text-foreground/80 mt-2 leading-relaxed">{r.comment}</p>
               </Card>
             ))}

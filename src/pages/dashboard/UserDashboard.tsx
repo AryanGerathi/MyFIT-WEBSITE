@@ -1,12 +1,13 @@
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/KpiCard";
-import { useRef } from "react";  // add ref to the existing useState/useMemo/useEffect import
-import { Camera, Trash2 } from "lucide-react";  // add to existing lucide import
+import { useRef } from "react";
+import { Camera, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VideoCallButton } from "@/components/VideoCallButton";
+import { ReviewModal } from "@/components/ReviewModal";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -18,7 +19,7 @@ import { Routes, Route, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   authService, creatorService, paymentService,
-  type PublicCreator,
+  type PublicCreator, type UserBooking,
 } from "@/services/backendService";
 import { useState, useMemo, useEffect } from "react";
 import CreatorProfile from "@/pages/CreatorProfile";
@@ -27,21 +28,6 @@ import Payment from "@/pages/Payment";
 import { CreatorCard } from "@/components/CreatorCard";
 import { ChatList } from "@/components/ChatList";
 import { getSavedIds } from "@/lib/savedCreators";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface UserBooking {
-  _id:          string;
-  creatorId:    { name: string; email: string } | null;
-  amount:       number;
-  commission:   number;
-  sessionType:  string;
-  date?:        string | null;
-  time?:        string | null;
-  status:       string;
-  jitsiRoomId?: string | null;
-  createdAt:    string;
-}
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 
@@ -57,22 +43,19 @@ function Overview() {
       .finally(() => setLoading(false));
   }, []);
 
-  const now = new Date();
+  const today = new Date(new Date().toDateString());
 
-const upcoming = bookings.filter((b) => {
-  if (b.status === "completed") return false;
-  // If booking has a date, only show if it's today or future
-  if (b.date) return new Date(b.date) >= new Date(new Date().toDateString());
-  // Monthly plans (no date) — always show as upcoming
-  return b.status === "upcoming" || b.status === "success";
-});
+  const upcoming = bookings.filter((b) => {
+    if (b.status === "completed") return false;
+    if (b.date) return new Date(b.date) >= today;
+    return b.status === "upcoming" || b.status === "success";
+  });
 
-const completed = bookings.filter((b) => {
-  if (b.status === "completed") return true;
-  // Past dated bookings count as completed
-  if (b.date) return new Date(b.date) < new Date(new Date().toDateString());
-  return false;
-});
+  const completed = bookings.filter((b) => {
+    if (b.status === "completed") return true;
+    if (b.date) return new Date(b.date) < today;
+    return false;
+  });
 
   return (
     <div className="space-y-6">
@@ -101,8 +84,12 @@ const completed = bookings.filter((b) => {
                     {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
                   </div>
                 </div>
-                {/* ✅ bookingId passed */}
-                <VideoCallButton label="Join" bookingId={b._id} />
+                <VideoCallButton
+                  label="Join"
+                  bookingId={b._id}
+                  sessionDate={b.date}
+                  sessionTime={b.time}
+                />
               </Card>
             ))}
           </div>
@@ -304,50 +291,47 @@ function FindCreators() {
       </aside>
 
       <div className="flex-1 min-w-0 space-y-4">
-  <div className="flex items-center justify-between flex-wrap gap-2">
-    <div>
-      <h2 className="font-display font-bold text-xl">Find Creators</h2>
-      <p className="text-sm text-muted-foreground mt-0.5">
-        {filtered.length} trainer{filtered.length !== 1 ? "s" : ""} available
-      </p>
-    </div>
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button variant="outline" className="lg:hidden gap-2">
-          <Filter size={16} /> Filters
-        </Button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-80 overflow-y-auto">
-        <h2 className="font-display font-semibold mb-5 mt-4">Filters</h2>
-        <FilterPanel {...filterProps} />
-      </SheetContent>
-    </Sheet>
-  </div>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div>
+            <h2 className="font-display font-bold text-xl">Find Creators</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {filtered.length} trainer{filtered.length !== 1 ? "s" : ""} available
+            </p>
+          </div>
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="lg:hidden gap-2">
+                <Filter size={16} /> Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80 overflow-y-auto">
+              <h2 className="font-display font-semibold mb-5 mt-4">Filters</h2>
+              <FilterPanel {...filterProps} />
+            </SheetContent>
+          </Sheet>
+        </div>
 
-  {/* ── Inline search bar — always visible ── */}
-  <div className="relative">
-    <Search
-      size={15}
-      className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none"
-    />
-    <input
-      type="text"
-      placeholder="Search by name or specialty…"
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-      className="w-full h-10 pl-9 pr-9 rounded-xl border border-border bg-background text-sm
-                 placeholder:text-muted-foreground focus:outline-none focus:ring-2
-                 focus:ring-accent/40 focus:border-accent transition-colors"
-    />
-    {search && (
-      <button
-        onClick={() => setSearch("")}
-        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <X size={14} />
-      </button>
-    )}
-  </div>
+        {/* Inline search bar */}
+        <div className="relative">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            placeholder="Search by name or specialty…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-10 pl-9 pr-9 rounded-xl border border-border bg-background text-sm
+                       placeholder:text-muted-foreground focus:outline-none focus:ring-2
+                       focus:ring-accent/40 focus:border-accent transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
 
         {filtered.length === 0 ? (
           <div className="text-center py-16 text-muted-foreground">
@@ -373,6 +357,16 @@ function MyBookings() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState<string | null>(null);
 
+  // ── Review modal state ───────────────────────────────────────────────────
+  const [reviewTarget, setReviewTarget] = useState<{
+    bookingId:   string;
+    creatorId:   string;
+    creatorName: string;
+  } | null>(null);
+
+  // Track bookings reviewed in this session so the button updates immediately
+  const [reviewedIds, setReviewedIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     paymentService.getMyBookings()
       .then(({ bookings: b }) => setBookings(b))
@@ -397,57 +391,109 @@ function MyBookings() {
 
   const today = new Date(new Date().toDateString());
 
-const upcoming = bookings.filter((b) => {
-  if (b.status === "completed") return false;
-  if (b.date) return new Date(b.date) >= today;
-  return b.status === "upcoming" || b.status === "success";
-});
+  const upcoming = bookings.filter((b) => {
+    if (b.status === "completed") return false;
+    if (b.date) return new Date(b.date) >= today;
+    return b.status === "upcoming" || b.status === "success";
+  });
 
-const completed = bookings.filter((b) => {
-  if (b.status === "completed") return true;
-  if (b.date) return new Date(b.date) < today;
-  return false;
-});
+  const completed = bookings.filter((b) => {
+    if (b.status === "completed") return true;
+    if (b.date) return new Date(b.date) < today;
+    return false;
+  });
 
-  const BookingCard = ({ b }: { b: UserBooking }) => (
-    <Card key={b._id} className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
-      <div>
-        <div className="font-semibold">{b.creatorId?.name ?? "—"}</div>
-        <div className="text-sm text-muted-foreground">
-          {b.date ? format(new Date(b.date), "PPP") : "Monthly plan"} · {b.time ?? "—"}
+  const BookingCard = ({ b }: { b: UserBooking }) => {
+    const isPast          = b.date ? new Date(b.date) < today : false;
+    const isCompleted     = b.status === "completed" || isPast;
+    const alreadyReviewed = reviewedIds.has(b._id);
+
+    return (
+      <Card className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
+        <div>
+          <div className="font-semibold">{b.creatorId?.name ?? "—"}</div>
+          <div className="text-sm text-muted-foreground">
+            {b.date ? format(new Date(b.date), "PPP") : "Monthly plan"} · {b.time ?? "—"}
+          </div>
+          <Badge variant="secondary" className="mt-1 text-xs capitalize">
+            {b.sessionType}
+          </Badge>
         </div>
-        <Badge variant="secondary" className="mt-1 text-xs capitalize">
-          {b.sessionType}
-        </Badge>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
-        {(b.status === "upcoming" || b.status === "success")
-          ? <VideoCallButton label="Join Session" bookingId={b._id} /> // ✅ fixed
-          : <Button variant="outline">Leave Review</Button>}
-      </div>
-    </Card>
-  );
+
+        <div className="flex items-center gap-3">
+          <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
+
+          {isCompleted ? (
+            alreadyReviewed ? (
+              <span className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md
+                               bg-green-50 border border-green-200 text-green-700 font-medium">
+                <CheckCircle2 size={13} /> Reviewed
+              </span>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (!b.creatorId) return;
+                  setReviewTarget({
+                    bookingId:   b._id,
+                    creatorId:   b.creatorId._id,   // ✅ typed correctly — no cast needed
+                    creatorName: b.creatorId.name,
+                  });
+                }}
+              >
+                ⭐ Leave Review
+              </Button>
+            )
+          ) : (
+            <VideoCallButton
+              label="Join Session"
+              bookingId={b._id}
+              sessionDate={b.date}
+              sessionTime={b.time}
+            />
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   return (
-    <Tabs defaultValue="upcoming">
-      <TabsList>
-        <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
-        <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
-      </TabsList>
+    <>
+      <Tabs defaultValue="upcoming">
+        <TabsList>
+          <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
+          <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="upcoming" className="space-y-3 mt-4">
-        {upcoming.length === 0
-          ? <p className="text-sm text-muted-foreground py-8 text-center">No upcoming sessions.</p>
-          : upcoming.map((b) => <BookingCard key={b._id} b={b} />)}
-      </TabsContent>
+        <TabsContent value="upcoming" className="space-y-3 mt-4">
+          {upcoming.length === 0
+            ? <p className="text-sm text-muted-foreground py-8 text-center">No upcoming sessions.</p>
+            : upcoming.map((b) => <BookingCard key={b._id} b={b} />)}
+        </TabsContent>
 
-      <TabsContent value="completed" className="space-y-3 mt-4">
-        {completed.length === 0
-          ? <p className="text-sm text-muted-foreground py-8 text-center">No completed sessions yet.</p>
-          : completed.map((b) => <BookingCard key={b._id} b={b} />)}
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="completed" className="space-y-3 mt-4">
+          {completed.length === 0
+            ? <p className="text-sm text-muted-foreground py-8 text-center">No completed sessions yet.</p>
+            : completed.map((b) => <BookingCard key={b._id} b={b} />)}
+        </TabsContent>
+      </Tabs>
+
+      {/* Review Modal */}
+      {reviewTarget && (
+        <ReviewModal
+          open={!!reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          bookingId={reviewTarget.bookingId}
+          creatorId={reviewTarget.creatorId}
+          creatorName={reviewTarget.creatorName}
+          onSubmitted={() => {
+            setReviewedIds((prev) => new Set(prev).add(reviewTarget.bookingId));
+            setReviewTarget(null);
+          }}
+        />
+      )}
+    </>
   );
 }
 
@@ -501,6 +547,7 @@ function Saved() {
 }
 
 // ── Profile Image Upload ──────────────────────────────────────────────────────
+
 function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
   currentUrl: string; initials: string; onUploaded: (url: string) => void;
 }) {
@@ -520,7 +567,7 @@ function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
       setPreview(data.imageUrl);
       onUploaded(data.imageUrl);
       toast.success("Profile photo updated!");
-    } catch (err) {
+    } catch {
       setPreview(currentUrl);
       toast.error("Upload failed. Please try again.");
     } finally {
@@ -586,6 +633,7 @@ function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
+
 function Profile() {
   const navigate = useNavigate();
   const user     = authService.getStoredUser();
@@ -597,7 +645,6 @@ function Profile() {
 
   return (
     <div className="max-w-2xl space-y-6">
-      {/* ── Avatar card ── */}
       <Card className="p-6 border-border/60 shadow-card">
         <ProfileImageUpload
           currentUrl={profileImageUrl}
@@ -613,7 +660,6 @@ function Profile() {
         </div>
       </Card>
 
-      {/* ── Edit form ── */}
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-5">Your profile</h2>
         <form onSubmit={(e) => { e.preventDefault(); toast.success("Profile updated"); }} className="space-y-4">
@@ -659,10 +705,7 @@ function Profile() {
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" className="bg-accent text-accent-foreground">Save changes</Button>
             <Button type="button" variant="outline"
-               onClick={() => { 
-                authService.clearSession(); 
-                navigate("/login"); 
-              }}>
+              onClick={() => { authService.clearSession(); navigate("/login"); }}>
               Logout
             </Button>
           </div>
@@ -685,7 +728,7 @@ export default function UserDashboardRoutes() {
       <Route path="creator/:id"   element={<CreatorProfile />} />
       <Route path="booking"       element={<Booking />}        />
       <Route path="payment"       element={<Payment />}        />
-      <Route path="chats" element={<ChatList />} />
+      <Route path="chats"         element={<ChatList />}        />
     </Routes>
   );
 }

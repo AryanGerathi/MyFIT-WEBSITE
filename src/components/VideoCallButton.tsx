@@ -1,33 +1,115 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogDescription,
   DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Video, Copy, Check, Loader2, ExternalLink } from "lucide-react";
+import { Video, Copy, Check, Loader2, ExternalLink, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { paymentService } from "@/services/backendService";
 
 interface VideoCallButtonProps {
-  label?:      string;
-  clientName?: string;
-  bookingId?:  string;
-  roomUrl?:    string;
+  label?:       string;
+  clientName?:  string;
+  bookingId?:   string;
+  roomUrl?:     string;
+  sessionDate?: string | null;  // e.g. "2025-05-03"
+  sessionTime?: string | null;  // e.g. "6:00 AM"
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Parse "6:00 AM" / "11:30 PM" → 24-hour { hours, minutes } */
+function parseTime12h(timeStr: string): { hours: number; minutes: number } | null {
+  const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!match) return null;
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3].toUpperCase();
+  if (period === "PM" && hours !== 12) hours += 12;
+  if (period === "AM" && hours === 12) hours = 0;
+  return { hours, minutes };
+}
+
+/** Build the Date object for when the session window opens (5 min before start) */
+function getWindowOpenTime(date: string, time: string): Date | null {
+  const parsed = parseTime12h(time);
+  if (!parsed) return null;
+  const sessionStart = new Date(date);
+  sessionStart.setHours(parsed.hours, parsed.minutes, 0, 0);
+  return new Date(sessionStart.getTime() - 5 * 60 * 1000);
+}
+
+/** Build the Date object for when the session window closes (90 min after start) */
+function getWindowCloseTime(date: string, time: string): Date | null {
+  const parsed = parseTime12h(time);
+  if (!parsed) return null;
+  const sessionStart = new Date(date);
+  sessionStart.setHours(parsed.hours, parsed.minutes, 0, 0);
+  return new Date(sessionStart.getTime() + 90 * 60 * 1000);
+}
+
+/** Is the current moment inside [sessionStart - 5min, sessionStart + 90min]? */
+function isSessionWindowOpen(date: string, time: string): boolean {
+  const open  = getWindowOpenTime(date, time);
+  const close = getWindowCloseTime(date, time);
+  if (!open || !close) return false;
+  const now = Date.now();
+  return now >= open.getTime() && now <= close.getTime();
+}
+
+/** How many whole minutes until the window opens (0 if already open / past) */
+function minutesUntilOpen(date: string, time: string): number {
+  const open = getWindowOpenTime(date, time);
+  if (!open) return 0;
+  return Math.max(0, Math.ceil((open.getTime() - Date.now()) / 60_000));
+}
+
+/** Human-readable countdown label */
+function countdownLabel(mins: number): string {
+  if (mins <= 0)  return "Opens in <1 min";
+  if (mins < 60)  return `Available in ${mins} min`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m > 0 ? `Available in ${h}h ${m}m` : `Available in ${h}h`;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function VideoCallButton({
   label = "Join Session",
   clientName,
   bookingId,
   roomUrl: roomUrlProp,
+  sessionDate,
+  sessionTime,
 }: VideoCallButtonProps) {
   const [open,    setOpen]    = useState(false);
   const [roomUrl, setRoomUrl] = useState<string | null>(roomUrlProp ?? null);
   const [loading, setLoading] = useState(false);
   const [copied,  setCopied]  = useState(false);
 
+  // Re-evaluate every 30 s so the button unlocks automatically without a refresh
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // ── Time-gate logic ──────────────────────────────────────────────────────────
+  // Monthly-plan bookings have no date/time → always available
+  const hasSchedule = !!(sessionDate && sessionTime);
+  const allowed     = !hasSchedule || isSessionWindowOpen(sessionDate!, sessionTime!);
+  const minsLeft    = hasSchedule && !allowed
+    ? minutesUntilOpen(sessionDate!, sessionTime!)
+    : 0;
+
+  // ── Handlers ─────────────────────────────────────────────────────────────────
+
   const handleOpen = async () => {
-    // If we already fetched the URL in this session, just re-open dialog
+    if (!allowed) return;
+
+    // Re-use already-fetched URL
     if (roomUrl) { setOpen(true); return; }
 
     if (!bookingId) {
@@ -66,6 +148,25 @@ export function VideoCallButton({
     window.open(roomUrl, "_blank", "noopener,noreferrer");
     setOpen(false);
   };
+
+  // ── Locked state ──────────────────────────────────────────────────────────────
+
+  if (!allowed) {
+    return (
+      <Button
+        variant="outline"
+        size="sm"
+        disabled
+        className="gap-1.5 shrink-0 text-muted-foreground cursor-not-allowed"
+        title={`Session link unlocks 5 minutes before the scheduled time`}
+      >
+        <Clock size={14} />
+        {countdownLabel(minsLeft)}
+      </Button>
+    );
+  }
+
+  // ── Active state ──────────────────────────────────────────────────────────────
 
   return (
     <>
@@ -137,7 +238,6 @@ export function VideoCallButton({
             </Button>
           </div>
 
-          {/* ✅ Corrected note — each person gets their own JWT-signed link */}
           <p className="text-xs text-muted-foreground text-center mt-1">
             Opens in a new tab · Your link is personal and secure —{" "}
             {clientName

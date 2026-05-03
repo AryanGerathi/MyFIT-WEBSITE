@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ChatList } from "@/components/ChatList";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { VideoCallButton } from "@/components/VideoCallButton";
 import {
   Wallet, Users, Calendar as CalIcon, TrendingUp,
@@ -18,13 +20,17 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import {
   authService, paymentService, APIError, Pricing,
-  type UserBooking, type MyWithdrawal, type BankDetails,
+  type UserBooking, type MyWithdrawal, type BankDetails,reviewService,
 } from "@/services/backendService";
 
 // ── Overview ──────────────────────────────────────────────────────────────────
 function Overview() {
   const [bookings, setBookings] = useState<UserBooking[]>([]);
   const [loading,  setLoading]  = useState(true);
+  const [avgRating, setAvgRating] = useState<number | null>(null);
+
+  const storedUser = authService.getStoredUser();
+  const creatorId  = storedUser?._id;
 
   useEffect(() => {
     paymentService.getMyCreatorBookings()
@@ -32,6 +38,14 @@ function Overview() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Fetch live average rating from reviews
+  useEffect(() => {
+    if (!creatorId) return;
+    reviewService.getCreatorReviews(creatorId)
+      .then(({ averageRating }) => setAvgRating(averageRating))
+      .catch(() => {});
+  }, [creatorId]);
 
   const today = new Date(new Date().toDateString());
   const upcoming = bookings.filter((b) => {
@@ -46,13 +60,19 @@ function Overview() {
     return sum + (basePrice - commission);
   }, 0);
 
+  const ratingDisplay = avgRating === null
+    ? "—"
+    : avgRating === 0
+      ? "New"
+      : `${avgRating.toFixed(1)}★`;
+
   return (
     <div className="space-y-6">
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard label="Total earnings"    value={loading ? "—" : `₹${totalEarnings.toLocaleString()}`} icon={Wallet} trend="+12% MoM" />
         <KpiCard label="Total clients"     value={loading ? "—" : String(bookings.length)}              icon={Users} />
         <KpiCard label="Upcoming sessions" value={loading ? "—" : String(upcoming.length)}              icon={CalIcon} />
-        <KpiCard label="Avg rating"        value="4.9★"                                                 icon={TrendingUp} />
+        <KpiCard label="Avg rating"        value={ratingDisplay}                                        icon={TrendingUp} />
       </div>
 
       <Card className="p-6 border-border/60 shadow-card">
@@ -73,7 +93,13 @@ function Overview() {
                     {b.date ? format(new Date(b.date), "PP") : "Monthly plan"} · {b.time ?? "—"}
                   </div>
                 </div>
-                <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />
+                <VideoCallButton
+                  label="Start Session"
+                  clientName={b.userId?.name ?? "Client"}
+                  bookingId={b._id}
+                  sessionDate={b.date}
+                  sessionTime={b.time}
+                />
               </div>
             ))}
           </div>
@@ -111,34 +137,61 @@ function Bookings() {
     </Card>
   );
 
-  if (bookings.length === 0) return (
-    <p className="text-sm text-muted-foreground py-10 text-center">No bookings yet.</p>
+  const today = new Date(new Date().toDateString());
+
+  const upcoming = bookings.filter((b) => {
+    if (b.status === "completed") return false;
+    if (b.date) return new Date(b.date) >= today;
+    return b.status === "upcoming" || b.status === "success";
+  });
+
+  const completed = bookings.filter((b) => {
+    if (b.status === "completed") return true;
+    if (b.date) return new Date(b.date) < today;
+    return false;
+  });
+
+  const BookingCard = ({ b, isCompleted }: { b: UserBooking; isCompleted: boolean }) => (
+    <Card className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
+      <div>
+        <div className="font-semibold">{b.userId?.name ?? "Client"}</div>
+        <div className="text-sm text-muted-foreground">
+          {b.date ? format(new Date(b.date), "PPP") : "Monthly plan"} · {b.time ?? "—"}
+        </div>
+        <Badge variant="secondary" className="mt-1 text-xs capitalize">{b.sessionType}</Badge>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
+        {isCompleted ? (
+          <span className="text-sm px-3 py-1.5 rounded-md bg-green-50 border border-green-200 text-green-700 font-medium inline-flex items-center gap-1.5">
+            <CheckCircle2 size={13} /> Completed
+          </span>
+        ) : (
+          <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />
+        )}
+      </div>
+    </Card>
   );
 
   return (
-    <div className="space-y-3">
-      {bookings.map((b) => (
-        <Card key={b._id} className="p-5 border-border/60 shadow-card flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <div className="font-semibold">{b.userId?.name ?? "Client"}</div>
-            <div className="text-sm text-muted-foreground">
-              {b.date ? format(new Date(b.date), "PPP") : "Monthly plan"} · {b.time ?? "—"}
-            </div>
-            <span className="text-xs text-muted-foreground capitalize">{b.sessionType}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="font-display font-bold">₹{b.amount.toLocaleString()}</span>
-            {(() => {
-  const today = new Date(new Date().toDateString());
-  const isPast = b.date ? new Date(b.date) < today : false;
-  return isPast || b.status === "completed"
-    ? <span className="text-sm px-3 py-1.5 rounded-md bg-success/10 text-success font-medium">Completed</span>
-    : <VideoCallButton label="Start Session" clientName={b.userId?.name ?? "Client"} bookingId={b._id} />;
-})()}
-          </div>
-        </Card>
-      ))}
-    </div>
+    <Tabs defaultValue="upcoming">
+      <TabsList>
+        <TabsTrigger value="upcoming">Upcoming ({upcoming.length})</TabsTrigger>
+        <TabsTrigger value="completed">Completed ({completed.length})</TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="upcoming" className="space-y-3 mt-4">
+        {upcoming.length === 0
+          ? <p className="text-sm text-muted-foreground py-8 text-center">No upcoming sessions.</p>
+          : upcoming.map((b) => <BookingCard key={b._id} b={b} isCompleted={false} />)}
+      </TabsContent>
+
+      <TabsContent value="completed" className="space-y-3 mt-4">
+        {completed.length === 0
+          ? <p className="text-sm text-muted-foreground py-8 text-center">No completed sessions yet.</p>
+          : completed.map((b) => <BookingCard key={b._id} b={b} isCompleted={true} />)}
+      </TabsContent>
+    </Tabs>
   );
 }
 
@@ -527,7 +580,6 @@ function TimeSlotManager() {
 }
 
 // ── Bank Details Manager ──────────────────────────────────────────────────────
-// ── Bank Details Manager ──────────────────────────────────────────────────────
 const EMPTY_BANK: BankDetails = {
   accountHolderName: "",
   accountNumber:     "",
@@ -547,12 +599,7 @@ function BankDetailsManager() {
     authService.getBankDetails()
       .then((res) => {
         const bd = res?.bankDetails;
-        if (
-          bd &&
-          typeof bd === "object" &&
-          bd.accountNumber &&
-          bd.accountHolderName
-        ) {
+        if (bd && typeof bd === "object" && bd.accountNumber && bd.accountHolderName) {
           setForm({
             accountHolderName: bd.accountHolderName ?? "",
             accountNumber:     bd.accountNumber     ?? "",
@@ -590,7 +637,6 @@ function BankDetailsManager() {
         accountType:       form.accountType,
         upiId:             form.upiId?.trim() || undefined,
       });
-
       const bd = res?.bankDetails;
       if (bd) {
         setForm({
@@ -612,7 +658,6 @@ function BankDetailsManager() {
 
   return (
     <Card className="p-6 border-border/60 shadow-card">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 mb-5">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
@@ -630,7 +675,6 @@ function BankDetailsManager() {
         )}
       </div>
 
-      {/* Security notice */}
       <div className="flex items-center gap-2 px-3 py-2.5 mb-5 rounded-lg bg-blue-50 border border-blue-100 text-blue-700 text-xs">
         <Lock size={13} className="shrink-0" />
         Your bank details are encrypted and only used for processing withdrawals. They are never shared with clients.
@@ -643,88 +687,55 @@ function BankDetailsManager() {
         </div>
       ) : (
         <form onSubmit={handleSave} className="space-y-4">
-          {/* Row 1 */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="bank-holder">Account Holder Name</Label>
-              <Input
-                id="bank-holder"
-                value={form.accountHolderName}
+              <Input id="bank-holder" value={form.accountHolderName}
                 onChange={(e) => set("accountHolderName", e.target.value)}
-                placeholder="As per bank records"
-                className="mt-1.5"
-              />
+                placeholder="As per bank records" className="mt-1.5" />
             </div>
             <div>
               <Label htmlFor="bank-name">Bank Name</Label>
-              <Input
-                id="bank-name"
-                value={form.bankName}
+              <Input id="bank-name" value={form.bankName}
                 onChange={(e) => set("bankName", e.target.value)}
-                placeholder="e.g. State Bank of India"
-                className="mt-1.5"
-              />
+                placeholder="e.g. State Bank of India" className="mt-1.5" />
             </div>
           </div>
-
-          {/* Row 2 */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="bank-account">Account Number</Label>
               <div className="relative mt-1.5">
                 <CreditCard size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="bank-account"
-                  value={form.accountNumber}
+                <Input id="bank-account" value={form.accountNumber}
                   onChange={(e) => set("accountNumber", e.target.value.replace(/\D/g, ""))}
-                  placeholder="Enter account number"
-                  className="pl-9"
-                  maxLength={18}
-                  autoComplete="off"
-                />
+                  placeholder="Enter account number" className="pl-9" maxLength={18} autoComplete="off" />
               </div>
             </div>
             <div>
               <Label htmlFor="bank-ifsc">IFSC Code</Label>
-              <Input
-                id="bank-ifsc"
-                value={form.ifscCode}
+              <Input id="bank-ifsc" value={form.ifscCode}
                 onChange={(e) => set("ifscCode", e.target.value.toUpperCase())}
                 placeholder="e.g. SBIN0001234"
-                className="mt-1.5 font-mono tracking-wider"
-                maxLength={11}
-              />
+                className="mt-1.5 font-mono tracking-wider" maxLength={11} />
             </div>
           </div>
-
-          {/* Row 3 */}
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="bank-type">Account Type</Label>
-              <select
-                id="bank-type"
-                value={form.accountType}
+              <select id="bank-type" value={form.accountType}
                 onChange={(e) => set("accountType", e.target.value as "savings" | "current")}
-                className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
+                className="mt-1.5 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                 <option value="savings">Savings</option>
                 <option value="current">Current</option>
               </select>
             </div>
             <div>
-              <Label htmlFor="bank-upi">
-                UPI ID <span className="text-muted-foreground font-normal">(optional)</span>
-              </Label>
-              <Input
-                id="bank-upi"
-                value={form.upiId ?? ""}
+              <Label htmlFor="bank-upi">UPI ID <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input id="bank-upi" value={form.upiId ?? ""}
                 onChange={(e) => set("upiId", e.target.value)}
-                placeholder="yourname@upi"
-                className="mt-1.5"
-              />
+                placeholder="yourname@upi" className="mt-1.5" />
             </div>
           </div>
-
           <div className="pt-1">
             <Button type="submit" disabled={saving} className="bg-accent text-accent-foreground">
               {saving
@@ -738,7 +749,6 @@ function BankDetailsManager() {
   );
 }
 
-// ── Profile Image Upload ──────────────────────────────────────────────────────
 function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
   currentUrl: string; initials: string; onUploaded: (url: string) => void;
 }) {
@@ -783,28 +793,32 @@ function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
   };
 
   return (
-    <div className="flex items-center gap-6">
+    // ✅ Changed: flex-wrap + min-w-0 so it wraps on mobile instead of overflowing
+    <div className="flex items-center gap-4 flex-wrap">
       <div className="relative shrink-0">
-        <div className="h-24 w-24 rounded-2xl overflow-hidden bg-accent/10 flex items-center justify-center border-2 border-border">
+        <div className="h-20 w-20 rounded-2xl overflow-hidden bg-accent/10 flex items-center justify-center border-2 border-border">
           {preview
             ? <img src={preview} alt="Profile" className="h-full w-full object-cover" />
             : <span className="font-display font-bold text-2xl text-accent">{initials}</span>}
         </div>
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full bg-accent text-accent-foreground
+          className="absolute -bottom-2 -right-2 h-7 w-7 rounded-full bg-accent text-accent-foreground
                      flex items-center justify-center shadow-md hover:bg-accent/90 transition-colors disabled:opacity-60">
-          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
+          {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
         </button>
       </div>
-      <div className="space-y-2">
+
+      {/* ✅ min-w-0 prevents this from overflowing its flex container */}
+      <div className="space-y-1.5 min-w-0">
         <p className="text-sm font-medium">Profile photo</p>
         <p className="text-xs text-muted-foreground">JPG, PNG or WebP · max 5 MB</p>
-        <div className="flex gap-2 mt-1">
+        {/* ✅ flex-wrap so buttons stack on very small screens */}
+        <div className="flex gap-2 flex-wrap mt-1">
           <Button type="button" size="sm" variant="outline" disabled={uploading}
             onClick={() => fileRef.current?.click()} className="gap-1.5">
             {uploading
               ? <><Loader2 size={13} className="animate-spin" />Uploading…</>
-              : <><Camera size={13} />{preview ? "Change photo" : "Upload photo"}</>}
+              : <><Camera size={13} />{preview ? "Change" : "Upload"}</>}
           </Button>
           {preview && (
             <Button type="button" size="sm" variant="outline" disabled={deleting} onClick={handleDelete}
@@ -995,8 +1009,6 @@ function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: 
       </Card>
 
       <TimeSlotManager />
-
-      {/* ── Bank Details ─────────────────────────────────────────────────── */}
       <BankDetailsManager />
     </div>
   );
@@ -1056,7 +1068,7 @@ export default function CreatorDashboardRoutes() {
       <Route path="bookings" element={<Bookings />} />
       <Route path="earnings" element={<Earnings  pricing={pricing} onSaveField={persistPricing} />} />
       <Route path="profile"  element={<Profile   pricing={pricing} onSaveField={persistPricing} />} />
-      <Route path="chats" element={<ChatList />} />
+      <Route path="chats"    element={<ChatList />} />
     </Routes>
   );
 }

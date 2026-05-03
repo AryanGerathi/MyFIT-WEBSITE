@@ -58,8 +58,6 @@ export interface PublicCreator {
   createdAt: string;
 }
 
-
-
 export interface AdminCreator {
   _id: string;
   name: string;
@@ -73,7 +71,7 @@ export interface AdminCreator {
     dailyPrice: number;
     monthlyPrice: number;
     monthlySessions: number;
-    timeSlots?: string[];      // ← ADD THIS LINE
+    timeSlots?: string[];
     bankDetails?: BankDetails;
   };
 }
@@ -116,8 +114,8 @@ export interface MyWithdrawal {
 
 export interface UserBooking {
   _id:         string;
-  creatorId:   { name: string; email: string } | null;
-  userId:      { name: string; email: string } | null;
+  creatorId:   { _id: string; name: string; email: string } | null;
+  userId:      { _id: string; name: string; email: string } | null;
   amount:      number;
   commission:  number;
   sessionType: string;
@@ -126,6 +124,23 @@ export interface UserBooking {
   status:      string;
   jitsiRoomId?: string | null;
   createdAt:   string;
+}
+
+export interface Review {
+  _id:       string;
+  userId:    { _id: string; name: string; profileImage?: { url: string } };
+  creatorId: string;
+  bookingId: string;
+  rating:    number;
+  comment:   string;
+  createdAt: string;
+}
+
+export interface SubmitReviewPayload {
+  bookingId: string;
+  creatorId: string;
+  rating:    number;
+  comment:   string;
 }
 
 export interface SignupPayload {
@@ -188,24 +203,27 @@ export interface VerifyPaymentResponse {
 
 // ─── API Response shapes ──────────────────────────────────────────────────────
 
-interface OTPStepResponse        { success: true; message: string; userId: string; }
-interface TokenResponse          { success: true; token: string; user: AuthUser; }
-interface SuccessResponse        { success: true; message: string; }
-interface ImageUploadResponse    { success: true; message: string; imageUrl: string; user: AuthUser; }
-interface PricingResponse        { success: true; pricing: Pricing; }
-interface SlotsResponse          { success: true; timeSlots: string[]; }
-interface UpdateProfileResponse  { success: true; user: AuthUser; }
-interface AdminCreatorsResponse  { success: true; creators: AdminCreator[]; }
-interface PublicCreatorsResponse { success: true; creators: PublicCreator[]; }
-interface AdminUsersResponse     { success: true; users: AdminUser[]; }
-interface AdminPaymentsResponse  { success: true; payments: AdminPayment[]; }
+interface OTPStepResponse           { success: true; message: string; userId: string; }
+interface TokenResponse             { success: true; token: string; user: AuthUser; }
+interface SuccessResponse           { success: true; message: string; }
+interface ImageUploadResponse       { success: true; message: string; imageUrl: string; user: AuthUser; }
+interface PricingResponse           { success: true; pricing: Pricing; }
+interface SlotsResponse             { success: true; timeSlots: string[]; }
+interface UpdateProfileResponse     { success: true; user: AuthUser; }
+interface AdminCreatorsResponse     { success: true; creators: AdminCreator[]; }
+interface PublicCreatorsResponse    { success: true; creators: PublicCreator[]; }
+interface AdminUsersResponse        { success: true; users: AdminUser[]; }
+interface AdminPaymentsResponse     { success: true; payments: AdminPayment[]; }
 interface AdminWithdrawalsResponse  { success: true; withdrawals: AdminWithdrawal[]; }
 interface MyWithdrawalsResponse     { success: true; withdrawals: MyWithdrawal[]; }
 interface WithdrawalActionResponse  { success: true; message: string; withdrawal: AdminWithdrawal; }
 interface WithdrawalRequestResponse { success: true; message: string; }
 interface UserBookingsResponse      { success: true; bookings: UserBooking[]; }
 interface VerifyCreatorResponse     { success: true; message: string; user: AdminCreator; }
-interface BankDetailsResponse { success: true; message?: string; bankDetails: BankDetails | null; }
+interface BankDetailsResponse       { success: true; message?: string; bankDetails: BankDetails | null; }
+interface SubmitReviewResponse      { success: true; message: string; review: Review; }
+interface GetReviewsResponse        { success: true; reviews: Review[]; averageRating: number; totalReviews: number; }
+interface GetMyReviewResponse       { success: true; review: Review | null; }
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -226,7 +244,7 @@ export class APIError extends Error {
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("myfit_token");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  const timer = setTimeout(() => controller.abort(), 8000); // ✅ reduced from 20s → 8s
 
   let res: Response;
   try {
@@ -294,7 +312,7 @@ export const authService = {
     const formData = new FormData();
     formData.append("image", file);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000);
+    const timer = setTimeout(() => controller.abort(), 20000); // keep 20s for uploads
     let res: Response;
     try {
       res = await fetch(`${API_URL}/api/upload/profile-image`, {
@@ -306,7 +324,10 @@ export const authService = {
     } catch (err) {
       clearTimeout(timer);
       const isTimeout = (err as Error).name === "AbortError";
-      throw new APIError(isTimeout ? "Upload timed out. Please try again." : "Upload failed. Check your connection.", 0);
+      throw new APIError(
+        isTimeout ? "Upload timed out. Please try again." : "Upload failed. Check your connection.",
+        0
+      );
     }
     clearTimeout(timer);
     const data = await res.json();
@@ -329,7 +350,6 @@ export const authService = {
   saveSlots: (timeSlots: string[]) =>
     apiFetch<SlotsResponse>("/api/creator/slots", { method: "PUT", body: JSON.stringify({ timeSlots }) }),
 
-  // ── Bank Details ────────────────────────────────────────────────────────────
   getBankDetails: () =>
     apiFetch<BankDetailsResponse>("/api/creator/bank-details"),
 
@@ -365,7 +385,8 @@ export const authService = {
 // ─── Admin Service ────────────────────────────────────────────────────────────
 
 export const adminService = {
-  getCreators: () => apiFetch<AdminCreatorsResponse>("/api/admin/creators"),
+  getCreators: () =>
+    apiFetch<AdminCreatorsResponse>("/api/admin/creators"),
 
   verifyCreator: (id: string, verified: boolean) =>
     apiFetch<VerifyCreatorResponse>(`/api/admin/creators/${id}/verify`, {
@@ -373,11 +394,14 @@ export const adminService = {
       body: JSON.stringify({ verified }),
     }),
 
-  getUsers: () => apiFetch<AdminUsersResponse>("/api/admin/users"),
+  getUsers: () =>
+    apiFetch<AdminUsersResponse>("/api/admin/users"),
 
-  getPayments: () => apiFetch<AdminPaymentsResponse>("/api/admin/payments"),
+  getPayments: () =>
+    apiFetch<AdminPaymentsResponse>("/api/admin/payments"),
 
-  getWithdrawals: () => apiFetch<AdminWithdrawalsResponse>("/api/admin/withdrawals"),
+  getWithdrawals: () =>
+    apiFetch<AdminWithdrawalsResponse>("/api/admin/withdrawals"),
 
   updateWithdrawal: (id: string, action: "approve" | "reject") =>
     apiFetch<WithdrawalActionResponse>(`/api/admin/withdrawals/${id}`, {
@@ -389,7 +413,24 @@ export const adminService = {
 // ─── Creator Service ──────────────────────────────────────────────────────────
 
 export const creatorService = {
-  getVerifiedCreators: () => apiFetch<PublicCreatorsResponse>("/api/creator/public"),
+  getVerifiedCreators: () =>
+    apiFetch<PublicCreatorsResponse>("/api/creator/public"),
+};
+
+// ─── Review Service ───────────────────────────────────────────────────────────
+
+export const reviewService = {
+  submitReview: (payload: SubmitReviewPayload) =>
+    apiFetch<SubmitReviewResponse>("/api/reviews", {
+      method: "POST",
+      body:   JSON.stringify(payload),
+    }),
+
+  getCreatorReviews: (creatorId: string) =>
+    apiFetch<GetReviewsResponse>(`/api/reviews/creator/${creatorId}`),
+
+  getMyReviewForBooking: (bookingId: string) =>
+    apiFetch<GetMyReviewResponse>(`/api/reviews/booking/${bookingId}`),
 };
 
 // ─── Chat Types ───────────────────────────────────────────────────────────────
@@ -454,10 +495,16 @@ export const chatService = {
 
 export const paymentService = {
   createOrder: (amount: number) =>
-    apiFetch<CreateOrderResponse>("/api/payment/create-order", { method: "POST", body: JSON.stringify({ amount }) }),
+    apiFetch<CreateOrderResponse>("/api/payment/create-order", {
+      method: "POST",
+      body: JSON.stringify({ amount }),
+    }),
 
   verifyPayment: (payload: VerifyPaymentPayload) =>
-    apiFetch<VerifyPaymentResponse>("/api/payment/verify", { method: "POST", body: JSON.stringify(payload) }),
+    apiFetch<VerifyPaymentResponse>("/api/payment/verify", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 
   getRoomUrl: (bookingId: string) =>
     apiFetch<{ success: true; roomId: string; roomUrl: string }>(`/api/payment/booking/${bookingId}/room`),
@@ -472,10 +519,15 @@ export const paymentService = {
     apiFetch<MyWithdrawalsResponse>("/api/payment/my-withdrawals"),
 
   getMyCreatorBookings: () =>
-    apiFetch<{ success: true; bookings: (UserBooking & { userId: { name: string; email: string } | null })[] }>(
+    apiFetch<{ success: true; bookings: (UserBooking & { userId: { _id: string; name: string; email: string } | null })[] }>(
       "/api/payment/my-creator-bookings"
     ),
 
   getMyBookings: () =>
     apiFetch<UserBookingsResponse>("/api/payment/my-bookings"),
 };
+
+// ─── Keep-alive ping ──────────────────────────────────────────────────────────
+// Wakes up the Render free-tier server immediately on app load
+export const pingServer = () =>
+  fetch(`${API_URL}/api/health`).catch(() => {});

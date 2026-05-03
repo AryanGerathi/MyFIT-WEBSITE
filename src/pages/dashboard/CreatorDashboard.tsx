@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, useNavigate } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/KpiCard";
 import { Button } from "@/components/ui/button";
@@ -836,6 +836,7 @@ function ProfileImageUpload({ currentUrl, initials, onUploaded }: {
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: Pricing) => Promise<void>; }) {
+  const navigate   = useNavigate(); 
   const storedUser = authService.getStoredUser();
   const initials   = storedUser?.name
     ? storedUser.name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2)
@@ -933,7 +934,7 @@ function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: 
       variant="outline"
       size="sm"
       className="gap-1.5 text-muted-foreground hover:text-destructive hover:border-destructive/40 shrink-0"
-      onClick={() => { authService.clearSession(); window.location.href = "/login"; }}
+      onClick={() => { authService.clearSession(); navigate("/login"); }}
     >
       <LogOut size={14} /> Logout
     </Button>
@@ -1012,7 +1013,7 @@ function Profile({ pricing, onSaveField }: { pricing: Pricing; onSaveField: (p: 
             <Button type="submit" disabled={saving} className="bg-accent text-accent-foreground">
               {saving ? <><Loader2 size={14} className="animate-spin mr-1.5" />Saving…</> : "Save profile"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => { authService.clearSession(); window.location.href = "/login"; }}>
+            <Button type="button" variant="outline" onClick={() => { authService.clearSession(); navigate("/login"); }}>
               Logout
             </Button>
           </div>

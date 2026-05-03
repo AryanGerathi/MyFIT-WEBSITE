@@ -65,14 +65,13 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
   );
 }
 
-// ─── OTP Screen ───────────────────────────────────────────────────────────────
+// ─── OTP Screen (signup only) ─────────────────────────────────────────────────
 function OTPScreen({
-  userId, maskedEmail, returnTo, purpose, onSuccess, onBack,
+  userId, maskedEmail, returnTo, onSuccess, onBack,
 }: {
   userId: string;
   maskedEmail: string;
   returnTo: string;
-  purpose: "signup" | "login";
   onSuccess: () => void;
   onBack: () => void;
 }) {
@@ -92,9 +91,9 @@ function OTPScreen({
     if (otp.length < 6) { toast.error("Please enter the full 6-digit OTP."); return; }
     setLoading(true);
     try {
-      const data = await authService.verifyOTP({ userId, otp, purpose });
+      const data = await authService.verifyOTP({ userId, otp, purpose: "signup" });
       authService.saveSession(data.token, data.user);
-      toast.success(purpose === "signup" ? "Account created! Welcome 🎉" : `Welcome back, ${data.user.name.split(" ")[0]}!`);
+      toast.success("Account created! Welcome 🎉");
       onSuccess();
       const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
       navigate(destination, { replace: true });
@@ -107,7 +106,7 @@ function OTPScreen({
   const handleResend = async () => {
     setResending(true);
     try {
-      const data = await authService.resendOTP({ userId, purpose });
+      const data = await authService.resendOTP({ userId, purpose: "signup" });
       toast.success(data.message);
       setOtp("");
       setCountdown(60);
@@ -140,7 +139,7 @@ function OTPScreen({
       >
         {loading
           ? <><Loader2 size={16} className="animate-spin mr-2" />Verifying…</>
-          : purpose === "signup" ? "Verify & Create Account" : "Verify & Login"}
+          : "Verify & Create Account"}
       </Button>
 
       <div className="text-sm text-muted-foreground">
@@ -159,7 +158,7 @@ function OTPScreen({
       </div>
 
       <button onClick={onBack} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-        ← Back to {purpose === "signup" ? "signup" : "login"}
+        ← Back to signup
       </button>
     </div>
   );
@@ -167,6 +166,8 @@ function OTPScreen({
 
 // ─── Auth Form ────────────────────────────────────────────────────────────────
 function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: string }) {
+  const navigate = useNavigate();
+
   const [screen,      setScreen]      = useState<Screen>("form");
   const [userId,      setUserId]      = useState("");
   const [maskedEmail, setMaskedEmail] = useState("");
@@ -183,9 +184,9 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
 
   const clearError = (key: string) => setErrors((prev) => ({ ...prev, [key]: "" }));
 
-  const getMaskedEmail = (email: string) => {
-    const local = email.split("@")[0];
-    return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${email.split("@")[1]}`;
+  const getMaskedEmail = (em: string) => {
+    const local = em.split("@")[0];
+    return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${em.split("@")[1]}`;
   };
 
   const validate = (): boolean => {
@@ -210,18 +211,19 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
     setLoading(true);
     try {
       if (mode === "signup") {
+        // Signup → send OTP, show OTP screen
         const data = await authService.signup({ name, email, phone, countryCode, password, role });
         setUserId(data.userId);
         setMaskedEmail(getMaskedEmail(email));
         toast.success(data.message);
         setScreen("otp");
       } else {
-        // Login also returns OTPStepResponse (userId) — then OTP screen handles token
+        // Login → direct session, no OTP
         const data = await authService.login({ email, password });
-        setUserId(data.userId);
-        setMaskedEmail(getMaskedEmail(email));
-        toast.success(data.message);
-        setScreen("otp");
+        authService.saveSession(data.token, data.user);
+        toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
+        const destination = returnTo || (data.user.role === "creator" ? "/creator-dashboard" : "/dashboard");
+        navigate(destination, { replace: true });
       }
     } catch (err) {
       if (err instanceof APIError) {
@@ -242,13 +244,13 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
   const inputCls = (key: string) =>
     errors[key] ? "border-destructive focus-visible:ring-destructive" : "";
 
+  // Only signup reaches the OTP screen
   if (screen === "otp") {
     return (
       <OTPScreen
         userId={userId}
         maskedEmail={maskedEmail}
         returnTo={returnTo}
-        purpose={mode === "login" ? "login" : "signup"}
         onSuccess={() => setScreen("form")}
         onBack={() => setScreen("form")}
       />
@@ -392,7 +394,7 @@ export default function Auth({ mode }: { mode: Mode }) {
             </span>
           </Link>
 
-          {/* Nav links — centered absolutely, icons-only on mobile */}
+          {/* Nav links — centered */}
           <nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             <Button asChild variant="ghost" size="sm">
               <Link to="/"><Home size={15} /></Link>

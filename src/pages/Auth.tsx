@@ -373,7 +373,7 @@ export default function Auth({ mode }: { mode: Mode }) {
 
       {/* ── Navbar ── */}
       <header className="h-16 shrink-0 border-b border-border/60 bg-background/80 backdrop-blur-md sticky top-0 z-50">
-        <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4">
+      <div className="h-full max-w-7xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4 relative">
           {/* Logo */}
           <Link to="/" className="inline-flex items-center gap-2 shrink-0">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-accent shadow-glow">
@@ -383,26 +383,29 @@ export default function Auth({ mode }: { mode: Mode }) {
               My<span className="text-accent">Fit</span>
             </span>
           </Link>
+{/* Nav links — centered absolutely, icons-only on mobile */}
+<nav className="flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+  <Button asChild variant="ghost" size="sm">
+    <Link to="/"><Home size={15} /></Link>
+  </Button>
+  <Button asChild variant="ghost" size="sm">
+    <Link to="/explore"><Compass size={15} /></Link>
+  </Button>
+</nav>
 
-          {/* Nav links */}
-          <nav className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link to="/"><Home size={15} />Home</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" className="gap-1.5">
-              <Link to="/explore"><Compass size={15} />Explore</Link>
-            </Button>
-            <div className="w-px h-5 bg-border mx-1" />
-            {mode === "login" ? (
-              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <Link to="/signup" state={{ returnTo }}>Sign up</Link>
-              </Button>
-            ) : (
-              <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                <Link to="/login" state={{ returnTo }}>Login</Link>
-              </Button>
-            )}
-          </nav>
+
+{/* Auth button — stays right */}
+<div className="ml-auto">
+  {mode === "login" ? (
+    <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+      <Link to="/signup" state={{ returnTo }}>Sign up</Link>
+    </Button>
+  ) : (
+    <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+      <Link to="/login" state={{ returnTo }}>Login</Link>
+    </Button>
+  )}
+</div>
         </div>
       </header>
 

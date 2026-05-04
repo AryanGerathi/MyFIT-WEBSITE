@@ -24,6 +24,10 @@ import UserDashboardRoutes    from "./pages/dashboard/UserDashboard.tsx";
 import CreatorDashboardRoutes from "./pages/dashboard/CreatorDashboard.tsx";
 import AdminDashboardRoutes   from "./pages/dashboard/AdminDashboard.tsx";
 import NotFound               from "./pages/NotFound.tsx";
+import About                  from "./pages/About.tsx";
+import Contact                from "./pages/Contact.tsx";
+import HelpCenter             from "./pages/HelpCenter.tsx";
+import Terms                  from "./pages/Terms.tsx";
 
 const queryClient = new QueryClient();
 
@@ -60,13 +64,6 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        {/*
-          basename={import.meta.env.BASE_URL} reads from vite.config.ts:
-            - development → "/"
-            - production  → "/MyFIT-WEBSITE/"
-          This ensures all <Link> and navigate() calls are prefixed correctly
-          on GitHub Pages, fixing the 404-on-reload issue.
-        */}
         <BrowserRouter basename={import.meta.env.BASE_URL}>
           <Routes>
             {/* ── Public ───────────────────────────────────────────── */}
@@ -76,6 +73,10 @@ const App = () => (
               <Route path="/creator/:id" element={<CreatorProfile />} />
               <Route path="/booking"     element={<Booking />}        />
               <Route path="/payment"     element={<Payment />}        />
+              <Route path="/about"       element={<About />}          />
+              <Route path="/contact"     element={<Contact />}        />
+              <Route path="/help"        element={<HelpCenter />}     />
+              <Route path="/terms"       element={<Terms />}          />
             </Route>
 
             {/* ── Auth ─────────────────────────────────────────────── */}

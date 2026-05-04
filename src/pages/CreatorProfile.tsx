@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,6 +88,10 @@ const CreatorProfile = () => {
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const [monthlySlot,   setMonthlySlot]   = useState<string | null>(null);
 
+  // ── Booked slots state ──────────────────────────────────────────────────────
+  const [bookedSlots,       setBookedSlots]       = useState<string[]>([]);
+  const [slotsLoading,      setSlotsLoading]      = useState(false);
+
   // ── Reviews state ───────────────────────────────────────────────────────────
   const [liveReviews,    setLiveReviews]    = useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
@@ -128,6 +132,25 @@ const CreatorProfile = () => {
       .finally(() => setReviewsLoading(false));
   }, [id]);
 
+  // ── Fetch booked slots whenever creator or selected date changes ─────────────
+  const fetchBookedSlots = useCallback(async (creatorId: string, date: Date) => {
+    setSlotsLoading(true);
+    setSlot(null); // Reset selected slot when date changes
+    try {
+      const booked = await creatorService.getBookedSlots(creatorId, date);
+      setBookedSlots(booked);
+    } catch {
+      setBookedSlots([]);
+    } finally {
+      setSlotsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!id || !singleDate || sessionType !== "single") return;
+    fetchBookedSlots(id, singleDate);
+  }, [id, singleDate, sessionType, fetchBookedSlots]);
+
   const imageUrl        = creator?.profileImage?.url ?? "";
   const name            = creator?.name ?? "";
   const specialty       = creator?.creatorProfile?.specialization ?? "";
@@ -139,6 +162,9 @@ const CreatorProfile = () => {
   const reviewCount     = liveReviews.length || (creator?.creatorProfile?.reviews ?? 0);
   const verified        = creator?.creatorProfile?.verified ?? false;
   const timeSlots       = creator?.creatorProfile?.timeSlots ?? [];
+
+  // ── Available slots = all trainer slots minus booked ones ───────────────────
+  const availableSlots = timeSlots.filter((t) => !bookedSlots.includes(t));
 
   const initials = name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
 
@@ -185,7 +211,7 @@ const CreatorProfile = () => {
     }
   };
 
-  const singleBookDisabled  = isLoggedIn && (!slot || !singleDate || timeSlots.length === 0);
+  const singleBookDisabled  = isLoggedIn && (!slot || !singleDate || availableSlots.length === 0);
   const monthlyBookDisabled = isLoggedIn && (
     !monthlyPrice ||
     (monthlySessions > 0 && selectedDates.length < monthlySessions) ||
@@ -224,32 +250,102 @@ const CreatorProfile = () => {
     );
   }
 
+  // ── Time Slot Picker ─────────────────────────────────────────────────────────
+  // For single sessions: shows available vs booked slots with visual distinction.
+  // For monthly sessions: shows all slots (no per-date booking conflict check).
   const TimeSlotPicker = ({
-    value, onChange, label = "Available time slots",
-  }: { value: string | null; onChange: (t: string) => void; label?: string }) => (
-    <div>
-      <h3 className="font-semibold text-sm mb-2 text-muted-foreground uppercase tracking-wide">{label}</h3>
-      {timeSlots.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-muted-foreground border border-dashed rounded-lg">
-          <Clock size={24} className="opacity-40" />
-          <p className="text-sm">No time slots set by trainer yet.</p>
+    value, onChange, label = "Available time slots", showAvailability = false,
+  }: {
+    value: string | null;
+    onChange: (t: string) => void;
+    label?: string;
+    /** When true, dims/disables slots that are already booked for the selected date */
+    showAvailability?: boolean;
+  }) => {
+    const slotsToRender = showAvailability ? timeSlots : timeSlots; // always render all; style differs
+
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">{label}</h3>
+          {showAvailability && slotsLoading && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 size={11} className="animate-spin" /> Checking availability…
+            </span>
+          )}
         </div>
-      ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {timeSlots.map((t) => (
-            <Button
-              key={t}
-              variant={value === t ? "default" : "outline"}
-              className={cn("transition-colors", value === t && "bg-accent text-accent-foreground hover:bg-accent/90")}
-              onClick={() => { if (!isLoggedIn) { goToLogin(); return; } onChange(t); }}
-            >
-              {t}
-            </Button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+
+        {timeSlots.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-center text-muted-foreground border border-dashed rounded-lg">
+            <Clock size={24} className="opacity-40" />
+            <p className="text-sm">No time slots set by trainer yet.</p>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-2">
+              {slotsToRender.map((t) => {
+                const isBooked    = showAvailability && bookedSlots.includes(t);
+                const isSelected  = value === t;
+                const isDisabled  = isBooked || (showAvailability && slotsLoading);
+
+                return (
+                  <button
+                    key={t}
+                    disabled={isDisabled}
+                    title={isBooked ? "Already booked — pick another slot" : t}
+                    onClick={() => {
+                      if (isDisabled) return;
+                      if (!isLoggedIn) { goToLogin(); return; }
+                      onChange(t);
+                    }}
+                    className={cn(
+                      "relative flex items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium transition-all",
+                      // Selected
+                      isSelected && !isBooked && "border-accent bg-accent text-accent-foreground",
+                      // Available & not selected
+                      !isSelected && !isBooked && "border-border bg-card hover:border-accent hover:bg-accent/5",
+                      // Booked — greyed out, not clickable
+                      isBooked && "cursor-not-allowed border-border/40 bg-muted/50 text-muted-foreground line-through opacity-60",
+                    )}
+                  >
+                    {isBooked && <Lock size={11} className="shrink-0" />}
+                    {t}
+                    {isBooked && (
+                      <span className="absolute -top-1.5 -right-1.5 rounded-full bg-rose-500 text-white text-[9px] font-bold px-1 leading-4">
+                        Full
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Legend — only shown for single-session picker */}
+            {showAvailability && !slotsLoading && bookedSlots.length > 0 && (
+              <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm border border-border bg-card" />
+                  Available
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-muted/60 border border-border/40 opacity-60" />
+                  Already booked
+                </span>
+              </div>
+            )}
+
+            {/* No available slots warning */}
+            {showAvailability && !slotsLoading && availableSlots.length === 0 && timeSlots.length > 0 && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/20 dark:border-rose-800 px-3 py-2 text-xs text-rose-700 dark:text-rose-400">
+                <AlertCircle size={13} className="shrink-0" />
+                All slots are booked for this date. Please select a different day.
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="container-app py-10 space-y-8">
@@ -373,14 +469,25 @@ const CreatorProfile = () => {
           <Card className="p-6 border-border/60 shadow-card">
             <h2 className="font-display font-semibold text-xl mb-4">Pick a date</h2>
             <DayPicker
-              mode="single" selected={singleDate} onSelect={setSingleDate}
-              disabled={{ before: new Date() }} className="pointer-events-auto"
+              mode="single"
+              selected={singleDate}
+              onSelect={(date) => {
+                setSingleDate(date);
+                // bookedSlots & slot reset happen in the useEffect above
+              }}
+              disabled={{ before: new Date() }}
+              className="pointer-events-auto"
             />
           </Card>
           <Card className="p-6 border-border/60 shadow-card flex flex-col gap-6">
             <div>
               <h2 className="font-display font-semibold text-xl mb-4">Available time slots</h2>
-              <TimeSlotPicker value={slot} onChange={setSlot} />
+              {/* Pass showAvailability=true so booked slots are visually disabled */}
+              <TimeSlotPicker
+                value={slot}
+                onChange={setSlot}
+                showAvailability
+              />
             </div>
             <Button
               onClick={book} size="lg" disabled={singleBookDisabled}
@@ -467,7 +574,13 @@ const CreatorProfile = () => {
               )}
             </div>
             <div className="border-t border-border/40 pt-4">
-              <TimeSlotPicker value={monthlySlot} onChange={setMonthlySlot} label="Preferred time slot (applies to all sessions)" />
+              {/* Monthly plan: no per-date conflict, show all slots */}
+              <TimeSlotPicker
+                value={monthlySlot}
+                onChange={setMonthlySlot}
+                label="Preferred time slot (applies to all sessions)"
+                showAvailability={false}
+              />
             </div>
             <Button
               onClick={book} size="lg" disabled={monthlyBookDisabled}
@@ -523,7 +636,6 @@ const CreatorProfile = () => {
               <Card key={r._id} className="p-5 border-border/60 shadow-card">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
-                    {/* Avatar */}
                     <div className="h-8 w-8 rounded-full bg-accent/10 flex items-center justify-center shrink-0 overflow-hidden">
                       {r.userId.profileImage?.url ? (
                         <img
@@ -544,7 +656,6 @@ const CreatorProfile = () => {
                   </span>
                 </div>
 
-                {/* Stars */}
                 <div className="flex items-center gap-0.5 mt-2.5">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Star

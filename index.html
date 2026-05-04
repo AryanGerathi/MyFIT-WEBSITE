@@ -21,7 +21,7 @@
       (function () {
         var p = new URLSearchParams(window.location.search).get('p');
         if (p) {
-          window.history.replaceState(null, '', '/MyFIT-WEBSITE' + p);
+          window.history.replaceState(null, '', p);
         }
       })();
     </script>

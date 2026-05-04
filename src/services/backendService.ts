@@ -225,6 +225,9 @@ interface SubmitReviewResponse      { success: true; message: string; review: Re
 interface GetReviewsResponse        { success: true; reviews: Review[]; averageRating: number; totalReviews: number; }
 interface GetMyReviewResponse       { success: true; review: Review | null; }
 
+// ─── NEW: Booked slots response ───────────────────────────────────────────────
+interface BookedSlotsResponse { success: true; bookedSlots: string[]; }
+
 // ─── Custom error class ───────────────────────────────────────────────────────
 
 export class APIError extends Error {
@@ -244,7 +247,7 @@ export class APIError extends Error {
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem("myfit_token");
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000); // ✅ reduced from 20s → 8s
+  const timer = setTimeout(() => controller.abort(), 8000);
 
   let res: Response;
   try {
@@ -312,7 +315,7 @@ export const authService = {
     const formData = new FormData();
     formData.append("image", file);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000); // keep 20s for uploads
+    const timer = setTimeout(() => controller.abort(), 20000);
     let res: Response;
     try {
       res = await fetch(`${API_URL}/api/upload/profile-image`, {
@@ -415,6 +418,28 @@ export const adminService = {
 export const creatorService = {
   getVerifiedCreators: () =>
     apiFetch<PublicCreatorsResponse>("/api/creator/public"),
+
+  /**
+   * Fetch the time slots already booked for a specific creator on a given date.
+   * The backend should return an array of booked slot strings, e.g. ["10:00 AM", "2:00 PM"].
+   *
+   * Backend route expected: GET /api/creator/:creatorId/booked-slots?date=YYYY-MM-DD
+   *
+   * If your backend uses a different route, update the path below accordingly.
+   */
+  getBookedSlots: (creatorId: string, date: Date): Promise<string[]> => {
+    // Format date as YYYY-MM-DD in local time (avoids UTC shift issues)
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const dateStr = `${y}-${m}-${d}`;
+
+    return apiFetch<BookedSlotsResponse>(
+      `/api/creator/${creatorId}/booked-slots?date=${dateStr}`
+    )
+      .then((res) => res.bookedSlots)
+      .catch(() => []); // Fail silently — show all slots if endpoint is unavailable
+  },
 };
 
 // ─── Review Service ───────────────────────────────────────────────────────────
@@ -528,6 +553,5 @@ export const paymentService = {
 };
 
 // ─── Keep-alive ping ──────────────────────────────────────────────────────────
-// Wakes up the Render free-tier server immediately on app load
 export const pingServer = () =>
   fetch(`${API_URL}/api/health`).catch(() => {});

@@ -48,7 +48,7 @@ function Filters({
         <Label className="font-display font-semibold mb-3 block">Price Type</Label>
         <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
           <button
-            onClick={() => { setPriceType("monthly"); setPrice(5000); }}
+            onClick={() => { setPriceType("monthly"); setPrice(100000); }}
             className={`flex-1 py-1.5 transition-colors ${
               priceType === "monthly"
                 ? "bg-accent text-accent-foreground"
@@ -58,7 +58,7 @@ function Filters({
             Monthly
           </button>
           <button
-            onClick={() => { setPriceType("session"); setPrice(5000); }}
+            onClick={() => { setPriceType("session"); setPrice(100000); }}
             className={`flex-1 py-1.5 transition-colors ${
               priceType === "session"
                 ? "bg-accent text-accent-foreground"
@@ -110,7 +110,7 @@ const Explore = () => {
   const [retryingIn,  setRetryingIn]  = useState<number | null>(null);
 
   const [category,  setCategory]  = useState("All");
-  const [price,     setPrice]     = useState(5000);
+  const [price,     setPrice]     = useState(100000);
   const [minRating, setMinRating] = useState(0);
   const [sort,      setSort]      = useState("popular");
   const [priceType, setPriceType] = useState<"monthly" | "session">("monthly");

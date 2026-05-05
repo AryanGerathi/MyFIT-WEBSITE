@@ -228,7 +228,7 @@ function FindCreators() {
 
   const [search,    setSearch]    = useState("");
   const [category,  setCategory]  = useState("All");
-  const [maxPrice,  setMaxPrice]  = useState(5000);
+  const [maxPrice,  setMaxPrice]  = useState(100000);
   const [minRating, setMinRating] = useState(0);
   const [priceType, setPriceType] = useState<"monthly" | "session">("monthly");
 

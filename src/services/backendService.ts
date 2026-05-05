@@ -160,13 +160,27 @@ export interface LoginPayload {
 export interface VerifyOTPPayload {
   userId: string;
   otp: string;
-  purpose: "signup" | "login";
+  purpose: "signup" | "login" | "forgot-password";
 }
 
 export interface ResendOTPPayload {
   userId: string;
-  purpose: "signup" | "login";
+  purpose: "signup" | "login" | "forgot-password";
 }
+
+// ─── NEW: Forgot Password payloads ───────────────────────────────────────────
+
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  userId: string;
+  otp: string;
+  newPassword: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export interface UpdateProfilePayload {
   name: string;
@@ -224,9 +238,7 @@ interface BankDetailsResponse       { success: true; message?: string; bankDetai
 interface SubmitReviewResponse      { success: true; message: string; review: Review; }
 interface GetReviewsResponse        { success: true; reviews: Review[]; averageRating: number; totalReviews: number; }
 interface GetMyReviewResponse       { success: true; review: Review | null; }
-
-// ─── NEW: Booked slots response ───────────────────────────────────────────────
-interface BookedSlotsResponse { success: true; bookedSlots: string[]; }
+interface BookedSlotsResponse       { success: true; bookedSlots: string[]; }
 
 // ─── Custom error class ───────────────────────────────────────────────────────
 
@@ -303,6 +315,32 @@ export const authService = {
 
   resendOTP: (payload: ResendOTPPayload) =>
     apiFetch<SuccessResponse>("/api/auth/resend-otp", { method: "POST", body: JSON.stringify(payload) }),
+
+  // ─── NEW: Forgot Password ──────────────────────────────────────────────────
+  /**
+   * Step 1 — Send a password-reset OTP to the given email.
+   * Backend route: POST /api/auth/forgot-password
+   * Body: { email }
+   * Response: { success: true, message: string, userId: string }
+   */
+  forgotPassword: (payload: ForgotPasswordPayload) =>
+    apiFetch<OTPStepResponse>("/api/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Step 2 — Verify the OTP + set a new password atomically.
+   * Backend route: POST /api/auth/reset-password
+   * Body: { userId, otp, newPassword }
+   * Response: { success: true, message: string }
+   */
+  resetPassword: (payload: ResetPasswordPayload) =>
+    apiFetch<SuccessResponse>("/api/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  // ──────────────────────────────────────────────────────────────────────────
 
   getMe: () =>
     apiFetch<{ success: true; user: AuthUser }>("/api/auth/me"),
@@ -419,16 +457,7 @@ export const creatorService = {
   getVerifiedCreators: () =>
     apiFetch<PublicCreatorsResponse>("/api/creator/public"),
 
-  /**
-   * Fetch the time slots already booked for a specific creator on a given date.
-   * The backend should return an array of booked slot strings, e.g. ["10:00 AM", "2:00 PM"].
-   *
-   * Backend route expected: GET /api/creator/:creatorId/booked-slots?date=YYYY-MM-DD
-   *
-   * If your backend uses a different route, update the path below accordingly.
-   */
   getBookedSlots: (creatorId: string, date: Date): Promise<string[]> => {
-    // Format date as YYYY-MM-DD in local time (avoids UTC shift issues)
     const y = date.getFullYear();
     const m = String(date.getMonth() + 1).padStart(2, "0");
     const d = String(date.getDate()).padStart(2, "0");
@@ -438,7 +467,7 @@ export const creatorService = {
       `/api/creator/${creatorId}/booked-slots?date=${dateStr}`
     )
       .then((res) => res.bookedSlots)
-      .catch(() => []); // Fail silently — show all slots if endpoint is unavailable
+      .catch(() => []);
   },
 };
 

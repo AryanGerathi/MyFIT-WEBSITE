@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Dumbbell, Eye, EyeOff, Loader2, ShieldCheck, RotateCcw, Home, Compass } from "lucide-react";
+import { Dumbbell, Eye, EyeOff, Loader2, ShieldCheck, RotateCcw, Home, Compass, KeyRound, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useRef, useEffect } from "react";
 import { authService, APIError } from "@/services/backendService";
@@ -12,6 +12,9 @@ import { authService, APIError } from "@/services/backendService";
 type Mode   = "login" | "signup";
 type Role   = "user" | "creator";
 type Screen = "form" | "otp";
+
+// ─── Forgot-password sub-screens ─────────────────────────────────────────────
+type FPStep = "email" | "otp" | "newPassword";
 
 const COUNTRY_CODES = [
   { code: "+91",  flag: "🇮🇳" },
@@ -65,7 +68,7 @@ function OTPInput({ value, onChange }: { value: string; onChange: (v: string) =>
   );
 }
 
-// ─── OTP Screen (signup only) ─────────────────────────────────────────────────
+// ─── Signup OTP Screen ────────────────────────────────────────────────────────
 function OTPScreen({
   userId, maskedEmail, returnTo, onSuccess, onBack,
 }: {
@@ -164,8 +167,292 @@ function OTPScreen({
   );
 }
 
+// ─── Forgot Password Flow ─────────────────────────────────────────────────────
+function ForgotPasswordFlow({ onBack }: { onBack: () => void }) {
+  const [step,        setStep]        = useState<FPStep>("email");
+  const [email,       setEmail]       = useState("");
+  const [userId,      setUserId]      = useState("");
+  const [maskedEmail, setMaskedEmail] = useState("");
+  const [otp,         setOtp]         = useState("");
+  const [newPw,       setNewPw]       = useState("");
+  const [confirmPw,   setConfirmPw]   = useState("");
+  const [showPw,      setShowPw]      = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [resending,   setResending]   = useState(false);
+  const [countdown,   setCountdown]   = useState(0);
+  const [emailErr,    setEmailErr]    = useState("");
+  const [pwErr,       setPwErr]       = useState("");
+
+  // Countdown for OTP resend
+  useEffect(() => {
+    if (countdown <= 0) return;
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [countdown]);
+
+  const getMaskedEmail = (em: string) => {
+    const [local, domain] = em.split("@");
+    return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 1))}@${domain}`;
+  };
+
+  // ── Step 1: Email ──────────────────────────────────────────────────────────
+  const handleSendOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailErr("Enter a valid email address");
+      return;
+    }
+    setEmailErr("");
+    setLoading(true);
+    try {
+      const data = await authService.forgotPassword({ email });
+      setUserId(data.userId);
+      setMaskedEmail(getMaskedEmail(email));
+      toast.success(data.message);
+      setCountdown(60);
+      setStep("otp");
+    } catch (err) {
+      if (err instanceof APIError) toast.error(err.message);
+      else toast.error("Cannot connect to server.");
+    } finally { setLoading(false); }
+  };
+
+  // ── Step 2: OTP ────────────────────────────────────────────────────────────
+  const handleResend = async () => {
+    setResending(true);
+    try {
+      const data = await authService.resendOTP({ userId, purpose: "forgot-password" });
+      toast.success(data.message);
+      setOtp("");
+      setCountdown(60);
+    } catch (err) {
+      if (err instanceof APIError) toast.error(err.message);
+      else toast.error("Cannot connect to server.");
+    } finally { setResending(false); }
+  };
+
+  const handleVerifyOTP = async () => {
+    if (otp.length < 6) { toast.error("Please enter the full 6-digit OTP."); return; }
+    // We don't fully verify here — the backend verifies OTP + new password atomically
+    // in reset-password. We just move to the next step.
+    setStep("newPassword");
+  };
+
+  // ── Step 3: New Password ───────────────────────────────────────────────────
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPw.length < 6) { setPwErr("Password must be at least 6 characters"); return; }
+    if (newPw !== confirmPw) { setPwErr("Passwords do not match"); return; }
+    setPwErr("");
+    setLoading(true);
+    try {
+      const data = await authService.resetPassword({ userId, otp, newPassword: newPw });
+      toast.success(data.message || "Password reset! Please log in.");
+      onBack(); // return to login form
+    } catch (err) {
+      if (err instanceof APIError) {
+        // If OTP was wrong/expired, send user back to OTP step
+        if (err.status === 400 || err.status === 410) {
+          toast.error(err.message);
+          setStep("otp");
+          setOtp("");
+        } else {
+          toast.error(err.message);
+        }
+      } else {
+        toast.error("Cannot connect to server.");
+      }
+    } finally { setLoading(false); }
+  };
+
+  // ── Render: Email step ─────────────────────────────────────────────────────
+  if (step === "email") {
+    return (
+      <div className="space-y-6 mt-4">
+        <div className="flex justify-center">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/10 text-accent">
+            <Mail size={28} />
+          </span>
+        </div>
+        <div className="text-center">
+          <h2 className="font-display font-bold text-xl">Forgot password?</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Enter your registered email and we'll send you a reset OTP.
+          </p>
+        </div>
+
+        <form onSubmit={handleSendOTP} className="space-y-4" noValidate>
+          <div>
+            <Label htmlFor="fp-email">Email address</Label>
+            <Input
+              id="fp-email" type="email" placeholder="you@example.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setEmailErr(""); }}
+              className={`mt-1.5 ${emailErr ? "border-destructive focus-visible:ring-destructive" : ""}`}
+            />
+            {emailErr && <p className="text-xs text-destructive mt-1">{emailErr}</p>}
+          </div>
+
+          <Button
+            type="submit" size="lg" disabled={loading}
+            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+          >
+            {loading
+              ? <><Loader2 size={16} className="animate-spin mr-2" />Sending OTP…</>
+              : "Send Reset OTP"}
+          </Button>
+        </form>
+
+        <button
+          onClick={onBack}
+          className="w-full text-sm text-center text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Back to login
+        </button>
+      </div>
+    );
+  }
+
+  // ── Render: OTP step ───────────────────────────────────────────────────────
+  if (step === "otp") {
+    return (
+      <div className="space-y-6 mt-4 text-center">
+        <div className="flex justify-center">
+          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/10 text-accent">
+            <ShieldCheck size={28} />
+          </span>
+        </div>
+        <div>
+          <h2 className="font-display font-bold text-xl">Check your inbox</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            We sent a 6-digit OTP to{" "}
+            <span className="font-medium text-foreground">{maskedEmail}</span>
+          </p>
+        </div>
+
+        <OTPInput value={otp} onChange={setOtp} />
+
+        <Button
+          onClick={handleVerifyOTP} disabled={otp.length < 6}
+          size="lg" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+        >
+          Continue
+        </Button>
+
+        <div className="text-sm text-muted-foreground">
+          {countdown > 0 ? (
+            <p>Resend OTP in <span className="font-medium text-foreground">{countdown}s</span></p>
+          ) : (
+            <button
+              onClick={handleResend} disabled={resending}
+              className="inline-flex items-center gap-1.5 text-accent font-medium hover:underline disabled:opacity-50"
+            >
+              {resending
+                ? <><Loader2 size={13} className="animate-spin" />Sending…</>
+                : <><RotateCcw size={13} />Resend OTP</>}
+            </button>
+          )}
+        </div>
+
+        <button
+          onClick={() => setStep("email")}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Change email
+        </button>
+      </div>
+    );
+  }
+
+  // ── Render: New Password step ──────────────────────────────────────────────
+  return (
+    <div className="space-y-6 mt-4">
+      <div className="flex justify-center">
+        <span className="grid h-14 w-14 place-items-center rounded-2xl bg-accent/10 text-accent">
+          <KeyRound size={28} />
+        </span>
+      </div>
+      <div className="text-center">
+        <h2 className="font-display font-bold text-xl">Set new password</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Choose a strong password for your account.
+        </p>
+      </div>
+
+      <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
+        <div>
+          <Label htmlFor="fp-new-pw">New password</Label>
+          <div className="relative mt-1.5">
+            <Input
+              id="fp-new-pw"
+              type={showPw ? "text" : "password"}
+              placeholder="••••••••"
+              value={newPw}
+              onChange={(e) => { setNewPw(e.target.value); setPwErr(""); }}
+              className={`pr-10 ${pwErr ? "border-destructive focus-visible:ring-destructive" : ""}`}
+            />
+            <button
+              type="button" onClick={() => setShowPw((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showPw ? "Hide password" : "Show password"}
+            >
+              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <Label htmlFor="fp-confirm-pw">Confirm new password</Label>
+          <div className="relative mt-1.5">
+            <Input
+              id="fp-confirm-pw"
+              type={showConfirm ? "text" : "password"}
+              placeholder="••••••••"
+              value={confirmPw}
+              onChange={(e) => { setConfirmPw(e.target.value); setPwErr(""); }}
+              className={`pr-10 ${pwErr ? "border-destructive focus-visible:ring-destructive" : ""}`}
+            />
+            <button
+              type="button" onClick={() => setShowConfirm((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              aria-label={showConfirm ? "Hide password" : "Show password"}
+            >
+              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {pwErr && <p className="text-xs text-destructive mt-1">{pwErr}</p>}
+        </div>
+
+        <Button
+          type="submit" size="lg" disabled={loading}
+          className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
+        >
+          {loading
+            ? <><Loader2 size={16} className="animate-spin mr-2" />Resetting…</>
+            : "Reset Password"}
+        </Button>
+      </form>
+
+      <button
+        onClick={() => setStep("otp")}
+        className="w-full text-sm text-center text-muted-foreground hover:text-foreground transition-colors"
+      >
+        ← Back to OTP
+      </button>
+    </div>
+  );
+}
+
 // ─── Auth Form ────────────────────────────────────────────────────────────────
-function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: string }) {
+function AuthForm({
+  mode, role, returnTo, onForgotPassword,
+}: {
+  mode: Mode;
+  role: Role;
+  returnTo: string;
+  onForgotPassword: () => void;
+}) {
   const navigate = useNavigate();
 
   const [screen,      setScreen]      = useState<Screen>("form");
@@ -211,14 +498,12 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
     setLoading(true);
     try {
       if (mode === "signup") {
-        // Signup → send OTP, show OTP screen
         const data = await authService.signup({ name, email, phone, countryCode, password, role });
         setUserId(data.userId);
         setMaskedEmail(getMaskedEmail(email));
         toast.success(data.message);
         setScreen("otp");
       } else {
-        // Login → direct session, no OTP
         const data = await authService.login({ email, password });
         authService.saveSession(data.token, data.user);
         toast.success(`Welcome back, ${data.user.name.split(" ")[0]}!`);
@@ -244,7 +529,6 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
   const inputCls = (key: string) =>
     errors[key] ? "border-destructive focus-visible:ring-destructive" : "";
 
-  // Only signup reaches the OTP screen
   if (screen === "otp") {
     return (
       <OTPScreen
@@ -308,7 +592,19 @@ function AuthForm({ mode, role, returnTo }: { mode: Mode; role: Role; returnTo: 
       )}
 
       <div>
-        <Label htmlFor={`pwd-${role}`}>Password</Label>
+        <div className="flex items-center justify-between">
+          <Label htmlFor={`pwd-${role}`}>Password</Label>
+          {/* ── Forgot password link — login mode only ── */}
+          {mode === "login" && (
+            <button
+              type="button"
+              onClick={onForgotPassword}
+              className="text-xs text-accent font-medium hover:underline"
+            >
+              Forgot password?
+            </button>
+          )}
+        </div>
         <div className="relative mt-1.5">
           <Input
             id={`pwd-${role}`} type={showPw ? "text" : "password"} placeholder="••••••••"
@@ -369,6 +665,9 @@ export default function Auth({ mode }: { mode: Mode }) {
 
   const initialRole: Role = params.get("role") === "creator" ? "creator" : "user";
   const returnTo: string  = (location.state as { returnTo?: string })?.returnTo ?? "";
+
+  // Controls whether the forgot-password flow overlays the card
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     if (authService.isLoggedIn()) {
@@ -440,50 +739,68 @@ export default function Auth({ mode }: { mode: Mode }) {
         {/* Right form panel */}
         <div className="flex items-center justify-center p-6 sm:p-12 bg-background">
           <Card className="w-full max-w-md p-8 border-border/60 shadow-card">
-            <h1 className="font-display font-bold text-2xl">
-              {mode === "login" ? "Welcome back" : "Create your account"}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {mode === "login"
-                ? "Sign in with your email and password"
-                : "Choose how you want to use MyFit"}
-            </p>
 
-            {returnTo && (
-              <div className="mt-3 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                You'll be returned to your previous page after {mode === "login" ? "logging in" : "signing up"}.
-              </div>
-            )}
-
-            {mode === "login" ? (
-              <div className="mt-6">
-                <AuthForm mode="login" role="user" returnTo={returnTo} />
-              </div>
+            {/* ── Forgot Password overlay inside the same card ── */}
+            {showForgotPassword ? (
+              <ForgotPasswordFlow onBack={() => setShowForgotPassword(false)} />
             ) : (
-              <Tabs defaultValue={initialRole} className="mt-6">
-                <TabsList className="grid grid-cols-2 w-full">
-                  <TabsTrigger value="user">As a User</TabsTrigger>
-                  <TabsTrigger value="creator">As a Creator</TabsTrigger>
-                </TabsList>
-                {(["user", "creator"] as const).map((role) => (
-                  <TabsContent key={role} value={role}>
-                    <AuthForm mode="signup" role={role} returnTo={returnTo} />
-                  </TabsContent>
-                ))}
-              </Tabs>
-            )}
+              <>
+                <h1 className="font-display font-bold text-2xl">
+                  {mode === "login" ? "Welcome back" : "Create your account"}
+                </h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {mode === "login"
+                    ? "Sign in with your email and password"
+                    : "Choose how you want to use MyFit"}
+                </p>
 
-            <p className="text-sm text-center text-muted-foreground mt-6">
-              {mode === "login" ? (
-                <>Don't have an account?{" "}
-                  <Link to="/signup" state={{ returnTo }} className="text-accent font-medium hover:underline">Sign up</Link>
-                </>
-              ) : (
-                <>Already have an account?{" "}
-                  <Link to="/login" state={{ returnTo }} className="text-accent font-medium hover:underline">Login</Link>
-                </>
-              )}
-            </p>
+                {returnTo && (
+                  <div className="mt-3 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                    You'll be returned to your previous page after {mode === "login" ? "logging in" : "signing up"}.
+                  </div>
+                )}
+
+                {mode === "login" ? (
+                  <div className="mt-6">
+                    <AuthForm
+                      mode="login"
+                      role="user"
+                      returnTo={returnTo}
+                      onForgotPassword={() => setShowForgotPassword(true)}
+                    />
+                  </div>
+                ) : (
+                  <Tabs defaultValue={initialRole} className="mt-6">
+                    <TabsList className="grid grid-cols-2 w-full">
+                      <TabsTrigger value="user">As a User</TabsTrigger>
+                      <TabsTrigger value="creator">As a Creator</TabsTrigger>
+                    </TabsList>
+                    {(["user", "creator"] as const).map((role) => (
+                      <TabsContent key={role} value={role}>
+                        <AuthForm
+                          mode="signup"
+                          role={role}
+                          returnTo={returnTo}
+                          onForgotPassword={() => {}}
+                        />
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                )}
+
+                <p className="text-sm text-center text-muted-foreground mt-6">
+                  {mode === "login" ? (
+                    <>Don't have an account?{" "}
+                      <Link to="/signup" state={{ returnTo }} className="text-accent font-medium hover:underline">Sign up</Link>
+                    </>
+                  ) : (
+                    <>Already have an account?{" "}
+                      <Link to="/login" state={{ returnTo }} className="text-accent font-medium hover:underline">Login</Link>
+                    </>
+                  )}
+                </p>
+              </>
+            )}
           </Card>
         </div>
       </div>

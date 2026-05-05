@@ -9,12 +9,13 @@ import { toast } from "sonner";
 import { paymentService } from "@/services/backendService";
 
 interface VideoCallButtonProps {
-  label?:       string;
-  clientName?:  string;
-  bookingId?:   string;
-  roomUrl?:     string;
-  sessionDate?: string | null;  // e.g. "2025-05-03"
-  sessionTime?: string | null;  // e.g. "6:00 AM"
+  label?:        string;
+  clientName?:   string;
+  bookingId?:    string;
+  roomUrl?:      string;
+  sessionDate?:  string | null;  // e.g. "2025-05-03"
+  sessionTime?:  string | null;  // e.g. "6:00 PM"
+  sessionType?:  string | null;  // e.g. "monthly" | "session"
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -31,22 +32,27 @@ function parseTime12h(timeStr: string): { hours: number; minutes: number } | nul
   return { hours, minutes };
 }
 
-/** Build the Date object for when the session window opens (5 min before start) */
-function getWindowOpenTime(date: string, time: string): Date | null {
+/** Build session start Date from date string + time string */
+function getSessionStart(date: string, time: string): Date | null {
   const parsed = parseTime12h(time);
   if (!parsed) return null;
   const sessionStart = new Date(date);
   sessionStart.setHours(parsed.hours, parsed.minutes, 0, 0);
-  return new Date(sessionStart.getTime() - 5 * 60 * 1000);
+  return sessionStart;
 }
 
-/** Build the Date object for when the session window closes (90 min after start) */
+/** Window opens 5 min before session start */
+function getWindowOpenTime(date: string, time: string): Date | null {
+  const start = getSessionStart(date, time);
+  if (!start) return null;
+  return new Date(start.getTime() - 5 * 60 * 1000);
+}
+
+/** Window closes 90 min after session start */
 function getWindowCloseTime(date: string, time: string): Date | null {
-  const parsed = parseTime12h(time);
-  if (!parsed) return null;
-  const sessionStart = new Date(date);
-  sessionStart.setHours(parsed.hours, parsed.minutes, 0, 0);
-  return new Date(sessionStart.getTime() + 90 * 60 * 1000);
+  const start = getSessionStart(date, time);
+  if (!start) return null;
+  return new Date(start.getTime() + 90 * 60 * 1000);
 }
 
 /** Is the current moment inside [sessionStart - 5min, sessionStart + 90min]? */
@@ -74,6 +80,35 @@ function countdownLabel(mins: number): string {
   return m > 0 ? `Available in ${h}h ${m}m` : `Available in ${h}h`;
 }
 
+/**
+ * Monthly plan: sessionTime exists (e.g. "6:00 PM") but NO sessionDate.
+ * We apply the same ±5min / +90min window against TODAY's date.
+ * If no sessionTime stored at all, fall back to broad 6 AM–11 PM window.
+ */
+function isMonthlyWindowOpen(sessionTime: string | null | undefined): boolean {
+  if (!sessionTime) {
+    const h = new Date().getHours();
+    return h >= 6 && h < 23;
+  }
+  const today = new Date().toISOString().split("T")[0]; // "YYYY-MM-DD"
+  return isSessionWindowOpen(today, sessionTime);
+}
+
+function monthlyLockedLabel(sessionTime: string | null | undefined): string {
+  if (!sessionTime) {
+    const now   = new Date();
+    const hours = now.getHours();
+    if (hours < 6) {
+      const minsLeft = (6 - hours) * 60 - now.getMinutes();
+      return countdownLabel(minsLeft);
+    }
+    return "Available tomorrow from 6 AM";
+  }
+  const today = new Date().toISOString().split("T")[0];
+  const mins  = minutesUntilOpen(today, sessionTime);
+  return countdownLabel(mins);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function VideoCallButton({
@@ -83,39 +118,51 @@ export function VideoCallButton({
   roomUrl: roomUrlProp,
   sessionDate,
   sessionTime,
+  sessionType,
 }: VideoCallButtonProps) {
   const [open,    setOpen]    = useState(false);
   const [roomUrl, setRoomUrl] = useState<string | null>(roomUrlProp ?? null);
   const [loading, setLoading] = useState(false);
   const [copied,  setCopied]  = useState(false);
 
-  // Re-evaluate every 30 s so the button unlocks automatically without a refresh
+  // Re-evaluate every 30 s so button unlocks automatically without a page refresh
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
   }, []);
 
-  // ── Time-gate logic ──────────────────────────────────────────────────────────
-  // Monthly-plan bookings have no date/time → always available
-  const hasSchedule = !!(sessionDate && sessionTime);
-  const allowed     = !hasSchedule || isSessionWindowOpen(sessionDate!, sessionTime!);
-  const minsLeft    = hasSchedule && !allowed
-    ? minutesUntilOpen(sessionDate!, sessionTime!)
-    : 0;
+  // ── Time-gate logic ───────────────────────────────────────────────────────────
 
-  // ── Handlers ─────────────────────────────────────────────────────────────────
+  // KEY FIX: monthly = sessionType is "monthly" OR no sessionDate exists.
+  // Even when sessionTime is present, absence of a date means it's a monthly plan.
+  const isMonthly = sessionType === "monthly" || !sessionDate;
+
+  let allowed      = true;
+  let lockedReason = "";
+
+  if (isMonthly) {
+    // Monthly plan → apply window relative to today using the stored time slot
+    allowed = isMonthlyWindowOpen(sessionTime);
+    if (!allowed) {
+      lockedReason = monthlyLockedLabel(sessionTime);
+    }
+  } else if (sessionDate && sessionTime) {
+    // One-off scheduled session → strict window
+    allowed = isSessionWindowOpen(sessionDate, sessionTime);
+    if (!allowed) {
+      const minsLeft = minutesUntilOpen(sessionDate, sessionTime);
+      lockedReason   = countdownLabel(minsLeft);
+    }
+  }
+  // sessionDate present but no sessionTime → always allowed (edge case)
+
+  // ── Handlers ──────────────────────────────────────────────────────────────────
 
   const handleOpen = async () => {
     if (!allowed) return;
-
-    // Re-use already-fetched URL
     if (roomUrl) { setOpen(true); return; }
-
-    if (!bookingId) {
-      toast.error("No booking ID provided.");
-      return;
-    }
+    if (!bookingId) { toast.error("No booking ID provided."); return; }
 
     setLoading(true);
     try {
@@ -158,10 +205,10 @@ export function VideoCallButton({
         size="sm"
         disabled
         className="gap-1.5 shrink-0 text-muted-foreground cursor-not-allowed"
-        title={`Session link unlocks 5 minutes before the scheduled time`}
+        title="Session link unlocks 5 minutes before your scheduled time"
       >
         <Clock size={14} />
-        {countdownLabel(minsLeft)}
+        {lockedReason}
       </Button>
     );
   }
@@ -176,9 +223,7 @@ export function VideoCallButton({
         size="sm"
         className="bg-accent hover:bg-accent/90 text-accent-foreground gap-1.5 shrink-0"
       >
-        {loading
-          ? <Loader2 size={14} className="animate-spin" />
-          : <Video size={14} />}
+        {loading ? <Loader2 size={14} className="animate-spin" /> : <Video size={14} />}
         {loading ? "Loading…" : label}
       </Button>
 
@@ -195,7 +240,6 @@ export function VideoCallButton({
             </DialogDescription>
           </DialogHeader>
 
-          {/* Room URL display */}
           {roomUrl && (
             <div className="mt-2 rounded-lg border border-border bg-muted/40 p-3">
               <p className="text-xs text-muted-foreground mb-1.5 font-medium">
@@ -205,12 +249,7 @@ export function VideoCallButton({
                 <code className="text-xs flex-1 break-all text-foreground leading-relaxed line-clamp-2">
                   {roomUrl}
                 </code>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={copy}
-                  className="shrink-0 h-7 w-7 p-0"
-                >
+                <Button size="sm" variant="ghost" onClick={copy} className="shrink-0 h-7 w-7 p-0">
                   {copied
                     ? <Check size={13} className="text-green-600" />
                     : <Copy size={13} />}
@@ -219,7 +258,6 @@ export function VideoCallButton({
             </div>
           )}
 
-          {/* Actions */}
           <div className="flex flex-col gap-2 mt-2">
             <Button
               className="w-full bg-accent hover:bg-accent/90 text-accent-foreground gap-2"
@@ -229,11 +267,7 @@ export function VideoCallButton({
               <ExternalLink size={15} />
               Open meeting room
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => setOpen(false)}
-            >
+            <Button variant="outline" className="w-full" onClick={() => setOpen(false)}>
               Close
             </Button>
           </div>

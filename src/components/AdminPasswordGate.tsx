@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Lock } from "lucide-react";
 
 const ADMIN_PASSWORD = "ARJUNISBEST";
@@ -9,6 +9,19 @@ export function AdminPasswordGate({ children }: { children: React.ReactNode }) {
     sessionStorage.getItem("admin_auth") === "true"
   );
   const [error, setError] = useState(false);
+
+  // Listen for logout event from the sidebar
+  useEffect(() => {
+    const handleAdminLogout = () => {
+      sessionStorage.removeItem("admin_auth");
+      setUnlocked(false);
+      setPassword("");
+      setError(false);
+    };
+
+    window.addEventListener("admin_logout", handleAdminLogout);
+    return () => window.removeEventListener("admin_logout", handleAdminLogout);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

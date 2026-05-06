@@ -1,8 +1,10 @@
 import { Routes, Route } from "react-router-dom";
 import { Card } from "@/components/ui/card";
+import { format } from "date-fns";
 import { KpiCard } from "@/components/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { getHelpRequests, type HelpRequest } from "@/pages/Help";
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
@@ -17,7 +19,7 @@ import {
   Check, X, ShieldCheck, Loader2, RefreshCw,
   ArrowDownToLine, Phone, Mail, Clock, Calendar,
   CreditCard, Star, IndianRupee, User,
-  CheckCircle2, Building2, BadgeCheck, Lock, Search,
+  CheckCircle2, Building2, BadgeCheck, Lock, Search, HelpCircle,
 } from "lucide-react";
 import {
   ResponsiveContainer, AreaChart, Area,
@@ -169,6 +171,179 @@ function SearchBar({
         <RefreshCw size={13} /> Refresh
       </Button>
     </div>
+  );
+}
+
+// ── Help Requests Page ────────────────────────────────────────────────────────
+
+function HelpRequestsPage() {
+  const [requests, setRequests] = useState<HelpRequest[]>([]);
+  const [selected, setSelected] = useState<HelpRequest | null>(null);
+
+  const load = () => setRequests(getHelpRequests());
+
+  useEffect(() => { load(); }, []);
+
+  const updateStatus = (id: string, status: HelpRequest["status"]) => {
+    const all = getHelpRequests().map((r) => r.id === id ? { ...r, status } : r);
+    localStorage.setItem("myfit_help_requests", JSON.stringify(all));
+    load();
+    if (selected?.id === id) setSelected((prev) => prev ? { ...prev, status } : null);
+    toast.success("Status updated.");
+  };
+
+  const open       = requests.filter((r) => r.status === "open");
+  const inProgress = requests.filter((r) => r.status === "in-progress");
+  const resolved   = requests.filter((r) => r.status === "resolved");
+
+  const StatusPill = ({ status }: { status: HelpRequest["status"] }) => {
+    const map = {
+      open:          "bg-amber-100 text-amber-700",
+      "in-progress": "bg-blue-100 text-blue-700",
+      resolved:      "bg-green-100 text-green-700",
+    };
+    const labels = { open: "Open", "in-progress": "In Progress", resolved: "Resolved" };
+    return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${map[status]}`}>{labels[status]}</span>;
+  };
+
+  const RequestRow = ({ r }: { r: HelpRequest }) => (
+    <TableRow className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelected(r)}>
+      <TableCell>
+        <div className="text-sm">{new Date(r.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
+        <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</div>
+      </TableCell>
+      <TableCell className="font-medium">{r.userName}</TableCell>
+      <TableCell className="text-muted-foreground text-sm">{r.userEmail}</TableCell>
+      <TableCell><Badge variant="secondary" className="text-xs">{r.category}</Badge></TableCell>
+      <TableCell className="max-w-[180px] truncate text-sm">{r.subject}</TableCell>
+      <TableCell><StatusPill status={r.status} /></TableCell>
+      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-end gap-1.5">
+          {r.status !== "in-progress" && (
+            <Button size="sm" variant="outline" className="text-xs h-7 px-2 gap-1 text-blue-600 border-blue-200"
+              onClick={() => updateStatus(r.id, "in-progress")}>
+              <Clock size={11} /> In Progress
+            </Button>
+          )}
+          {r.status !== "resolved" && (
+            <Button size="sm" className="text-xs h-7 px-2 gap-1 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => updateStatus(r.id, "resolved")}>
+              <Check size={11} /> Resolve
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+
+  return (
+    <>
+      {/* Summary cards */}
+      <div className="grid sm:grid-cols-3 gap-4 mb-6">
+        {[
+          { label: "Open",        count: open.length,       color: "text-amber-600", bg: "bg-amber-50 border-amber-200" },
+          { label: "In Progress", count: inProgress.length, color: "text-blue-600",  bg: "bg-blue-50 border-blue-200" },
+          { label: "Resolved",    count: resolved.length,   color: "text-green-600", bg: "bg-green-50 border-green-200" },
+        ].map((s) => (
+          <Card key={s.label} className={`p-5 border ${s.bg}`}>
+            <p className="text-sm text-muted-foreground">{s.label}</p>
+            <p className={`font-display font-bold text-3xl mt-1 ${s.color}`}>{s.count}</p>
+          </Card>
+        ))}
+      </div>
+
+      <Card className="border-border/60 shadow-card overflow-hidden">
+        <div className="p-5 border-b border-border/60 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="font-display font-semibold flex items-center gap-2">
+              <HelpCircle size={16} className="text-accent" /> Help Requests
+              {open.length > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">{open.length} open</span>
+              )}
+            </h2>
+            <p className="text-sm text-muted-foreground">{requests.length} total · click a row to view full message</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={load} className="gap-2">
+            <RefreshCw size={13} /> Refresh
+          </Button>
+        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>User</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Subject</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {requests.map((r) => <RequestRow key={r.id} r={r} />)}
+            {requests.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
+                  <HelpCircle size={28} className="mx-auto mb-2 opacity-20" />
+                  No help requests yet.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Detail drawer */}
+      <Sheet open={!!selected} onOpenChange={() => setSelected(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="mb-5">
+            <SheetTitle>Help Request Detail</SheetTitle>
+          </SheetHeader>
+          {selected && (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <Badge variant="secondary">{selected.category}</Badge>
+                <StatusPill status={selected.status} />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Subject</p>
+                <p className="font-semibold">{selected.subject}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-semibold mb-1">Message</p>
+                <div className="rounded-xl border border-border/60 bg-muted/30 p-4 text-sm leading-relaxed whitespace-pre-wrap">
+                  {selected.message}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-card px-4 py-3 space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">User</span><span className="font-medium">{selected.userName}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span>{selected.userEmail}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Submitted</span><span>{format(new Date(selected.createdAt), "PPp")}</span></div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                {selected.status !== "in-progress" && (
+                  <Button variant="outline" className="flex-1 gap-1.5 text-blue-600 border-blue-200"
+                    onClick={() => updateStatus(selected.id, "in-progress")}>
+                    <Clock size={14} /> Mark In Progress
+                  </Button>
+                )}
+                {selected.status !== "resolved" && (
+                  <Button className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => updateStatus(selected.id, "resolved")}>
+                    <Check size={14} /> Mark Resolved
+                  </Button>
+                )}
+                {selected.status === "resolved" && (
+                  <p className="text-sm text-green-600 font-medium flex items-center gap-1.5 mx-auto">
+                    <CheckCircle2 size={16} /> This request has been resolved
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
@@ -1344,13 +1519,14 @@ function ReportsPage() {
 export default function AdminDashboardRoutes() {
   return (
     <Routes>
-      <Route index              element={<Overview />}        />
-      <Route path="users"       element={<UsersPage />}       />
-      <Route path="creators"    element={<CreatorsPage />}    />
-      <Route path="payments"    element={<PaymentsPage />}    />
-      <Route path="bookings"    element={<BookingsPage />}    />
-      <Route path="withdrawals" element={<WithdrawalsPage />} />
-      <Route path="reports"     element={<ReportsPage />}     />
+      <Route index                  element={<Overview />}          />
+      <Route path="users"           element={<UsersPage />}         />
+      <Route path="creators"        element={<CreatorsPage />}      />
+      <Route path="payments"        element={<PaymentsPage />}      />
+      <Route path="bookings"        element={<BookingsPage />}      />
+      <Route path="withdrawals"     element={<WithdrawalsPage />}   />
+      <Route path="reports"         element={<ReportsPage />}       />
+      <Route path="help-requests"   element={<HelpRequestsPage />}  />
     </Routes>
   );
 }

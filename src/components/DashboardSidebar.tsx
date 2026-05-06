@@ -20,9 +20,14 @@ export function DashboardSidebar({ items, brandLabel }: { items: SidebarItem[]; 
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    authService.clearSession();
-    toast.success("Logged out successfully");
-    navigate("/login");
+    if (brandLabel === "Admin") {
+      // Fire event — AdminPasswordGate listens and locks itself
+      window.dispatchEvent(new Event("admin_logout"));
+    } else {
+      authService.clearSession();
+      toast.success("Logged out successfully");
+      navigate("/login");
+    }
   };
 
   return (

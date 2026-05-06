@@ -8,7 +8,7 @@ import { AdminPasswordGate } from "@/components/AdminPasswordGate";
 import {
   LayoutDashboard, CalendarDays, Heart, User, Wallet, ClipboardList,
   Users, Briefcase, CreditCard, FileBarChart, CalendarCheck, Search,
-  ArrowDownToLine, MessageCircle,
+  ArrowDownToLine, MessageCircle, HelpCircle,   // ← add HelpCircle here
 } from "lucide-react";
 
 import { PublicLayout }    from "@/components/PublicLayout";
@@ -57,6 +57,7 @@ const adminItems = [
   { title: "Bookings",    url: "/admin/bookings",    icon: CalendarCheck   },
   { title: "Withdrawals", url: "/admin/withdrawals", icon: ArrowDownToLine },
   { title: "Reports",     url: "/admin/reports",     icon: FileBarChart    },
+  { title: "Help Requests",  url: "/admin/help-requests",    icon: HelpCircle      },
 ];
 
 const App = () => (
@@ -104,11 +105,9 @@ const App = () => (
 
             {/* ── Admin dashboard ──────────────────────────────────── */}
             <Route element={
-  <ProtectedRoute>
-    <AdminPasswordGate>
-      <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />
-    </AdminPasswordGate>
-  </ProtectedRoute>
+  <AdminPasswordGate>
+    <DashboardLayout items={adminItems} brandLabel="Admin" title="Admin Console" />
+  </AdminPasswordGate>
 }>
   <Route path="/admin/*" element={<AdminDashboardRoutes />} />
 </Route>

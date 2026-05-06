@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { Camera, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import Help from "@/pages/Help";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { VideoCallButton } from "@/components/VideoCallButton";
@@ -729,6 +730,7 @@ export default function UserDashboardRoutes() {
       <Route path="booking"       element={<Booking />}        />
       <Route path="payment"       element={<Payment />}        />
       <Route path="chats"         element={<ChatList />}        />
+      <Route path="help"          element={<Help />}           />
     </Routes>
   );
 }

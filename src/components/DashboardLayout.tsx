@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, Outlet } from "react-router-dom";
-import { Home } from "lucide-react";
+import { Home, HelpCircle } from "lucide-react";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { DashboardSidebar, BottomNav, type SidebarItem } from "./DashboardSidebar";
 import { authService, paymentService } from "@/services/backendService";
@@ -8,13 +8,15 @@ import { authService, paymentService } from "@/services/backendService";
 export function DashboardLayout({ items, brandLabel, title }: {
   items: SidebarItem[]; brandLabel: string; title: string;
 }) {
-  // ── Prefetch common data so child routes don't wait ───────────────────────
   useEffect(() => {
     const user = authService.getStoredUser();
     authService.getMe().catch(() => {});
     if (user?.role === "user")    paymentService.getMyBookings().catch(() => {});
     if (user?.role === "creator") paymentService.getMyCreatorBookings().catch(() => {});
   }, []);
+
+  const user = authService.getStoredUser();
+  const isUser = user?.role === "user" && brandLabel === "User";// Help button only for regular users, not admin/creator
 
   return (
     <SidebarProvider>
@@ -44,6 +46,19 @@ export function DashboardLayout({ items, brandLabel, title }: {
             </div>
 
             <h1 className="font-display font-semibold flex-1">{title}</h1>
+
+            {/* ── Help button — users only ───────────────────────────────── */}
+            {isUser && (
+              <Link
+                to="/dashboard/help"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium
+                           text-accent border border-accent/30 bg-accent/5
+                           hover:bg-accent/15 hover:border-accent/60 transition-colors shrink-0"
+              >
+                <HelpCircle size={15} />
+                <span className="hidden sm:inline">Help</span>
+              </Link>
+            )}
 
             {/* ── Home button ───────────────────────────────────────────── */}
             <Link

@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { KpiCard } from "@/components/KpiCard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { getHelpRequests, type HelpRequest } from "@/pages/Help";
+import { type HelpRequest } from "@/services/backendService";
 import {
   Table, TableBody, TableCell, TableHead,
   TableHeader, TableRow,
@@ -32,7 +32,7 @@ import {
   AdminCreator,
   AdminUser,
   AdminPayment,
-  AdminWithdrawal,
+  AdminWithdrawal, helpService,
 } from "@/services/backendService";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -179,17 +179,39 @@ function SearchBar({
 function HelpRequestsPage() {
   const [requests, setRequests] = useState<HelpRequest[]>([]);
   const [selected, setSelected] = useState<HelpRequest | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+  const [actionId, setActionId] = useState<string | null>(null);
 
-  const load = () => setRequests(getHelpRequests());
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await helpService.getAll();
+      setRequests(data.requests);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not load help requests.";
+      setError(msg);
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const updateStatus = (id: string, status: HelpRequest["status"]) => {
-    const all = getHelpRequests().map((r) => r.id === id ? { ...r, status } : r);
-    localStorage.setItem("myfit_help_requests", JSON.stringify(all));
-    load();
-    if (selected?.id === id) setSelected((prev) => prev ? { ...prev, status } : null);
-    toast.success("Status updated.");
+  const updateStatus = async (id: string, status: HelpRequest["status"]) => {
+    setActionId(id);
+    try {
+      await helpService.updateStatus(id, status);
+      setRequests((prev) => prev.map((r) => r._id === id ? { ...r, status } : r));
+      setSelected((prev) => prev?._id === id ? { ...prev, status } : prev);
+      toast.success("Status updated.");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update status.");
+    } finally {
+      setActionId(null);
+    }
   };
 
   const open       = requests.filter((r) => r.status === "open");
@@ -203,14 +225,25 @@ function HelpRequestsPage() {
       resolved:      "bg-green-100 text-green-700",
     };
     const labels = { open: "Open", "in-progress": "In Progress", resolved: "Resolved" };
-    return <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${map[status]}`}>{labels[status]}</span>;
+    return (
+      <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${map[status]}`}>
+        {labels[status]}
+      </span>
+    );
   };
 
   const RequestRow = ({ r }: { r: HelpRequest }) => (
-    <TableRow className="cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelected(r)}>
+    <TableRow
+      className="cursor-pointer hover:bg-muted/50 transition-colors"
+      onClick={() => setSelected(r)}
+    >
       <TableCell>
-        <div className="text-sm">{new Date(r.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</div>
-        <div className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}</div>
+        <div className="text-sm">
+          {new Date(r.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {new Date(r.createdAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true })}
+        </div>
       </TableCell>
       <TableCell className="font-medium">{r.userName}</TableCell>
       <TableCell className="text-muted-foreground text-sm">{r.userEmail}</TableCell>
@@ -220,21 +253,37 @@ function HelpRequestsPage() {
       <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end gap-1.5">
           {r.status !== "in-progress" && (
-            <Button size="sm" variant="outline" className="text-xs h-7 px-2 gap-1 text-blue-600 border-blue-200"
-              onClick={() => updateStatus(r.id, "in-progress")}>
-              <Clock size={11} /> In Progress
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={actionId === r._id}
+              className="text-xs h-7 px-2 gap-1 text-blue-600 border-blue-200"
+              onClick={() => updateStatus(r._id, "in-progress")}
+            >
+              {actionId === r._id
+                ? <Loader2 size={11} className="animate-spin" />
+                : <><Clock size={11} /> In Progress</>}
             </Button>
           )}
           {r.status !== "resolved" && (
-            <Button size="sm" className="text-xs h-7 px-2 gap-1 bg-green-600 hover:bg-green-700 text-white"
-              onClick={() => updateStatus(r.id, "resolved")}>
-              <Check size={11} /> Resolve
+            <Button
+              size="sm"
+              disabled={actionId === r._id}
+              className="text-xs h-7 px-2 gap-1 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => updateStatus(r._id, "resolved")}
+            >
+              {actionId === r._id
+                ? <Loader2 size={11} className="animate-spin" />
+                : <><Check size={11} /> Resolve</>}
             </Button>
           )}
         </div>
       </TableCell>
     </TableRow>
   );
+
+  if (loading) return <LoadingState message="Loading help requests…" />;
+  if (error)   return <ErrorState  message={error} onRetry={load} />;
 
   return (
     <>
@@ -258,10 +307,14 @@ function HelpRequestsPage() {
             <h2 className="font-display font-semibold flex items-center gap-2">
               <HelpCircle size={16} className="text-accent" /> Help Requests
               {open.length > 0 && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">{open.length} open</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
+                  {open.length} open
+                </span>
               )}
             </h2>
-            <p className="text-sm text-muted-foreground">{requests.length} total · click a row to view full message</p>
+            <p className="text-sm text-muted-foreground">
+              {requests.length} total · click a row to view full message
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={load} className="gap-2">
             <RefreshCw size={13} /> Refresh
@@ -280,7 +333,7 @@ function HelpRequestsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {requests.map((r) => <RequestRow key={r.id} r={r} />)}
+            {requests.map((r) => <RequestRow key={r._id} r={r} />)}
             {requests.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
@@ -316,21 +369,41 @@ function HelpRequestsPage() {
                 </div>
               </div>
               <div className="rounded-xl border border-border/60 bg-card px-4 py-3 space-y-2 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">User</span><span className="font-medium">{selected.userName}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Email</span><span>{selected.userEmail}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Submitted</span><span>{format(new Date(selected.createdAt), "PPp")}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">User</span>
+                  <span className="font-medium">{selected.userName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Email</span>
+                  <span>{selected.userEmail}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Submitted</span>
+                  <span>{format(new Date(selected.createdAt), "PPp")}</span>
+                </div>
               </div>
               <div className="flex gap-2 pt-2">
                 {selected.status !== "in-progress" && (
-                  <Button variant="outline" className="flex-1 gap-1.5 text-blue-600 border-blue-200"
-                    onClick={() => updateStatus(selected.id, "in-progress")}>
-                    <Clock size={14} /> Mark In Progress
+                  <Button
+                    variant="outline"
+                    disabled={actionId === selected._id}
+                    className="flex-1 gap-1.5 text-blue-600 border-blue-200"
+                    onClick={() => updateStatus(selected._id, "in-progress")}
+                  >
+                    {actionId === selected._id
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <><Clock size={14} /> Mark In Progress</>}
                   </Button>
                 )}
                 {selected.status !== "resolved" && (
-                  <Button className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
-                    onClick={() => updateStatus(selected.id, "resolved")}>
-                    <Check size={14} /> Mark Resolved
+                  <Button
+                    disabled={actionId === selected._id}
+                    className="flex-1 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                    onClick={() => updateStatus(selected._id, "resolved")}
+                  >
+                    {actionId === selected._id
+                      ? <Loader2 size={14} className="animate-spin" />
+                      : <><Check size={14} /> Mark Resolved</>}
                   </Button>
                 )}
                 {selected.status === "resolved" && (

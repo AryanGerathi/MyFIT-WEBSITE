@@ -423,6 +423,50 @@ export const authService = {
   isLoggedIn: (): boolean => !!localStorage.getItem("myfit_token"),
 };
 
+// ─── Help Request Types ───────────────────────────────────────────────────────
+
+export interface HelpRequest {
+  _id:       string;
+  userId:    string;
+  userName:  string;
+  userEmail: string;
+  category:  string;
+  subject:   string;
+  message:   string;
+  status:    "open" | "in-progress" | "resolved";
+  createdAt: string;
+}
+
+interface HelpRequestResponse      { success: true; request:  HelpRequest; }
+interface HelpRequestsResponse     { success: true; requests: HelpRequest[]; }
+interface HelpStatusUpdateResponse { success: true; request:  HelpRequest; }
+
+// ─── Help Service ─────────────────────────────────────────────────────────────
+
+export const helpService = {
+  // User: submit a new request
+  submit: (payload: { category: string; subject: string; message: string }) =>
+    apiFetch<HelpRequestResponse>("/api/help", {
+      method: "POST",
+      body:   JSON.stringify(payload),
+    }),
+
+  // User: get only their own requests
+  getMine: () =>
+    apiFetch<HelpRequestsResponse>("/api/help/mine"),
+
+  // Admin: get all requests
+  getAll: () =>
+    apiFetch<HelpRequestsResponse>("/api/help"),
+
+  // Admin: update status
+  updateStatus: (id: string, status: HelpRequest["status"]) =>
+    apiFetch<HelpStatusUpdateResponse>(`/api/help/${id}/status`, {
+      method: "PATCH",
+      body:   JSON.stringify({ status }),
+    }),
+};
+
 // ─── Admin Service ────────────────────────────────────────────────────────────
 
 export const adminService = {

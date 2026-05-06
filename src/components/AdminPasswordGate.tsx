@@ -1,37 +1,59 @@
 import { useState, useEffect } from "react";
-import { Lock } from "lucide-react";
+import { Lock, Loader2 } from "lucide-react";
 
-const ADMIN_PASSWORD = "ARJUNISBEST";
+const API_URL = import.meta.env.VITE_API_URL || "https://myfit-backend-lxj3.onrender.com";
 
 export function AdminPasswordGate({ children }: { children: React.ReactNode }) {
   const [password, setPassword] = useState("");
-  const [unlocked, setUnlocked] = useState(
-    sessionStorage.getItem("admin_auth") === "true"
-  );
-  const [error, setError] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [error,    setError]    = useState(false);
+  const [loading,  setLoading]  = useState(false);
+
+  // On mount — check if we already have a valid admin token
+  useEffect(() => {
+    const token = sessionStorage.getItem("admin_token");
+    if (token) {
+      localStorage.setItem("myfit_token", token);
+      setUnlocked(true);
+    }
+  }, []);
 
   // Listen for logout event from the sidebar
   useEffect(() => {
     const handleAdminLogout = () => {
-      sessionStorage.removeItem("admin_auth");
+      sessionStorage.removeItem("admin_token");
+      localStorage.removeItem("myfit_token");
       setUnlocked(false);
       setPassword("");
       setError(false);
     };
-
     window.addEventListener("admin_logout", handleAdminLogout);
     return () => window.removeEventListener("admin_logout", handleAdminLogout);
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === ADMIN_PASSWORD) {
-      sessionStorage.setItem("admin_auth", "true");
+    setLoading(true);
+    setError(false);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.token) throw new Error();
+
+      // Store token so apiFetch in backendService picks it up automatically
+      sessionStorage.setItem("admin_token", data.token);
+      localStorage.setItem("myfit_token", data.token);
       setUnlocked(true);
-      setError(false);
-    } else {
+    } catch {
       setError(true);
       setPassword("");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -64,9 +86,12 @@ export function AdminPasswordGate({ children }: { children: React.ReactNode }) {
           </div>
           <button
             type="submit"
-            className="w-full rounded-xl gradient-accent text-white py-3 font-semibold hover:opacity-90 transition"
+            disabled={loading}
+            className="w-full rounded-xl gradient-accent text-white py-3 font-semibold hover:opacity-90 transition disabled:opacity-60 flex items-center justify-center gap-2"
           >
-            Unlock Dashboard
+            {loading
+              ? <><Loader2 size={16} className="animate-spin" /> Unlocking…</>
+              : "Unlock Dashboard"}
           </button>
         </form>
       </div>

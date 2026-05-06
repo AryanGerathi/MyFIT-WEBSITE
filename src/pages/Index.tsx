@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,8 @@ import { creatorService, authService, type PublicCreator } from "@/services/back
 const Index = () => {
   const [featured, setFeatured] = useState<PublicCreator[]>([]);
   const [loadingCreators, setLoadingCreators] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const isLoggedIn = authService.isLoggedIn();
   const user = authService.getStoredUser();
 
@@ -25,6 +27,20 @@ const Index = () => {
       .catch(() => {})
       .finally(() => setLoadingCreators(false));
   }, []);
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+    const progress = scrollLeft / (scrollWidth - clientWidth);
+    const index = Math.round(progress * (featured.length - 1));
+    setActiveIndex(index);
+  };
+
+  const scrollToIndex = (i: number) => {
+    if (!scrollRef.current) return;
+    const cardWidth = scrollRef.current.scrollWidth / featured.length;
+    scrollRef.current.scrollTo({ left: cardWidth * i, behavior: "smooth" });
+  };
 
   return (
     <>
@@ -164,68 +180,93 @@ const Index = () => {
             No verified creators available right now.
           </Card>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featured.map((c) => {
-              const initials = c.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
-              const monthly = c.creatorProfile?.monthlyPrice ?? 0;
-              const sessions = c.creatorProfile?.monthlySessions ?? 1;
-              const perSession = sessions > 0 ? Math.round(monthly / sessions) : 0;
-              const rating = c.creatorProfile?.rating ?? 0;
-              const reviews = c.creatorProfile?.reviews ?? 0;
-              const specialty = c.creatorProfile?.specialization ?? "";
+          <>
+            <div
+              ref={scrollRef}
+              onScroll={handleScroll}
+              className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <style>{`
+                .creators-scroll::-webkit-scrollbar { display: none; }
+              `}</style>
+              {featured.map((c) => {
+                const initials = c.name.split(" ").map((w: string) => w[0]).join("").toUpperCase().slice(0, 2);
+                const monthly = c.creatorProfile?.monthlyPrice ?? 0;
+                const sessions = c.creatorProfile?.monthlySessions ?? 1;
+                const perSession = sessions > 0 ? Math.round(monthly / sessions) : 0;
+                const rating = c.creatorProfile?.rating ?? 0;
+                const reviews = c.creatorProfile?.reviews ?? 0;
+                const specialty = c.creatorProfile?.specialization ?? "";
 
-              return (
-                <Card
-                  key={c._id}
-                  className="flex flex-col border-border/60 shadow-card hover:shadow-soft transition-shadow overflow-hidden"
-                >
-                  <div className="h-44 bg-accent/10 flex items-center justify-center relative overflow-hidden">
-                    {c.profileImage?.url ? (
-                      <img src={c.profileImage.url} alt={c.name} className="h-full w-full object-cover" />
-                    ) : (
-                      <span className="font-display font-bold text-5xl text-accent/40">{initials}</span>
-                    )}
-                  </div>
-                  <div className="p-4 flex flex-col flex-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-display font-semibold text-base leading-tight">{c.name}</span>
-                      <BadgeCheck size={14} className="text-accent shrink-0" />
-                    </div>
-                    {specialty && (
-                      <Badge variant="secondary" className="text-xs w-fit mt-1">{specialty}</Badge>
-                    )}
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1.5 flex-1">
-                      {c.creatorProfile?.bio || "—"}
-                    </p>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <RatingStars rating={rating} />
-                      <span className="text-sm font-medium">{rating > 0 ? rating : "New"}</span>
-                      {reviews > 0 && (
-                        <span className="text-xs text-muted-foreground">({reviews})</span>
+                return (
+                  <Card
+                    key={c._id}
+                    className="flex flex-col border-border/60 shadow-card hover:shadow-soft transition-shadow overflow-hidden snap-start shrink-0 w-[75vw] sm:w-72"
+                  >
+                    <div className="h-44 bg-accent/10 flex items-center justify-center relative overflow-hidden">
+                      {c.profileImage?.url ? (
+                        <img src={c.profileImage.url} alt={c.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="font-display font-bold text-5xl text-accent/40">{initials}</span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
-                      <div>
-                        {monthly > 0 ? (
-                          <>
-                            <span className="font-display font-bold text-base text-primary">
-                              ₹{perSession.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground">/session</span>
-                          </>
-                        ) : (
-                          <span className="text-xs text-muted-foreground italic">Pricing TBD</span>
+                    <div className="p-4 flex flex-col flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-display font-semibold text-base leading-tight">{c.name}</span>
+                        <BadgeCheck size={14} className="text-accent shrink-0" />
+                      </div>
+                      {specialty && (
+                        <Badge variant="secondary" className="text-xs w-fit mt-1">{specialty}</Badge>
+                      )}
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1.5 flex-1">
+                        {c.creatorProfile?.bio || "—"}
+                      </p>
+                      <div className="flex items-center gap-1.5 mt-2">
+                        <RatingStars rating={rating} />
+                        <span className="text-sm font-medium">{rating > 0 ? rating : "New"}</span>
+                        {reviews > 0 && (
+                          <span className="text-xs text-muted-foreground">({reviews})</span>
                         )}
                       </div>
-                      <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                        <Link to={`/creator/${c._id}`}>Book</Link>
-                      </Button>
+                      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/60">
+                        <div>
+                          {monthly > 0 ? (
+                            <>
+                              <span className="font-display font-bold text-base text-primary">
+                                ₹{perSession.toLocaleString()}
+                              </span>
+                              <span className="text-xs text-muted-foreground">/session</span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-muted-foreground italic">Pricing TBD</span>
+                          )}
+                        </div>
+                        <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                          <Link to={`/creator/${c._id}`}>Book</Link>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </Card>
-              );
-            })}
-          </div>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {/* Scroll indicator dots */}
+            <div className="flex items-center justify-center gap-2 mt-4">
+              {featured.map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => scrollToIndex(i)}
+                  className={`transition-all duration-300 rounded-full ${
+                    i === activeIndex
+                      ? "w-6 h-2 bg-accent"
+                      : "w-2 h-2 bg-accent/30"
+                  }`}
+                />
+              ))}
+            </div>
+          </>
         )}
       </section>
 

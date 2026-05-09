@@ -1,7 +1,6 @@
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { getSavedIds, toggleSaved } from "@/lib/savedCreators";
 import { BadgeCheck, Heart, Lock } from "lucide-react";
 import { RatingStars } from "./RatingStars";
@@ -14,8 +13,8 @@ interface CreatorCardProps {
 }
 
 export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate  = useNavigate();
+  const location  = useLocation();
 
   const id           = creator._id;
   const name         = creator.name;
@@ -33,7 +32,6 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
   const profilePath = variant === "dashboard" ? `/dashboard/creator/${id}` : `/creator/${id}`;
 
   const [saved, setSaved] = useState(() => getSavedIds().includes(id));
-
   const isLoggedIn = authService.isLoggedIn();
 
   const goToLogin = () =>
@@ -55,75 +53,77 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
 
   return (
     <Card className="group overflow-hidden border-border/60 shadow-card hover:shadow-soft transition-all duration-300 hover:-translate-y-1">
+      {/* Image */}
       <Link to={profilePath} className="block relative">
-        <div className="aspect-[4/3] overflow-hidden bg-muted flex items-center justify-center">
+        <div className="aspect-square overflow-hidden bg-muted flex items-center justify-center">
           {imageUrl ? (
             <img
               src={imageUrl} alt={name} loading="lazy"
               className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
-            <span className="font-display font-bold text-2xl sm:text-4xl text-accent select-none">{initials}</span>
+            <span className="font-display font-bold text-3xl text-accent select-none">{initials}</span>
           )}
         </div>
+        {/* Save button */}
         <button
           onClick={handleToggleSave}
           className={`absolute top-2 right-2 p-1.5 rounded-full backdrop-blur-sm transition-colors ${
             saved ? "bg-red-500 text-white" : "bg-black/30 text-white hover:bg-black/50"
           }`}
         >
-          <Heart size={12} fill={saved ? "currentColor" : "none"} />
+          <Heart size={13} fill={saved ? "currentColor" : "none"} />
         </button>
       </Link>
 
-      <div className="p-2.5 sm:p-5 space-y-2 sm:space-y-3">
-        {/* Name + badge */}
-        <div className="flex items-start justify-between gap-1">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1">
-              <h3 className="font-display font-semibold text-sm sm:text-lg leading-tight truncate">{name}</h3>
-              {verified && <BadgeCheck size={13} className="text-accent shrink-0" />}
-            </div>
-            <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5 line-clamp-1">{subtitle}</p>
+      {/* Content */}
+      <div className="p-3 space-y-2">
+        {/* Name + verified */}
+        <div>
+          <div className="flex items-center gap-1">
+            <h3 className="font-display font-semibold text-sm leading-tight truncate">{name}</h3>
+            {verified && <BadgeCheck size={13} className="text-accent shrink-0" />}
           </div>
-          {specialty && (
-            <Badge variant="secondary" className="hidden sm:inline-flex shrink-0 font-medium text-xs">{specialty}</Badge>
-          )}
+          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">{subtitle}</p>
         </div>
 
-        {/* Rating + price */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
-          <div className="flex items-center gap-1">
-            <RatingStars rating={rating} />
-            <span className="text-[11px] sm:text-sm font-medium">{rating > 0 ? rating : "New"}</span>
-            {reviews > 0 && <span className="text-[10px] sm:text-xs text-muted-foreground">({reviews})</span>}
-          </div>
-          <div className="text-left sm:text-right">
-            {dailyPrice > 0 ? (
-              <><span className="font-display font-bold text-sm sm:text-lg text-primary">₹{dailyPrice.toLocaleString()}</span>
-              <span className="text-[10px] sm:text-xs text-muted-foreground">/session</span></>
-            ) : monthlyPrice > 0 ? (
-              <><span className="font-display font-bold text-sm sm:text-lg text-primary">₹{monthlyPrice.toLocaleString()}</span>
-              <span className="text-[10px] sm:text-xs text-muted-foreground">/mo</span></>
-            ) : (
-              <span className="text-[10px] sm:text-xs text-muted-foreground italic">TBD</span>
-            )}
-          </div>
+        {/* Rating */}
+        <div className="flex items-center gap-1">
+          <RatingStars rating={rating} />
+          <span className="text-[11px] font-medium">{rating > 0 ? rating : "New"}</span>
+          {reviews > 0 && <span className="text-[10px] text-muted-foreground">({reviews})</span>}
+        </div>
+
+        {/* Price */}
+        <div>
+          {dailyPrice > 0 ? (
+            <>
+              <span className="font-display font-bold text-base text-primary">₹{dailyPrice.toLocaleString()}</span>
+              <span className="text-[10px] text-muted-foreground">/session</span>
+            </>
+          ) : monthlyPrice > 0 ? (
+            <>
+              <span className="font-display font-bold text-base text-primary">₹{monthlyPrice.toLocaleString()}</span>
+              <span className="text-[10px] text-muted-foreground">/mo</span>
+            </>
+          ) : (
+            <span className="text-[10px] text-muted-foreground italic">TBD</span>
+          )}
         </div>
 
         {/* Buttons */}
         {variant === "dashboard" ? (
-          <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
+          <div className="flex flex-col gap-1.5">
             <Button
               size="sm"
-              className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
+              className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-xs h-8"
               onClick={handleBook}
             >
               {!isLoggedIn && <Lock size={11} className="mr-1" />} Book
             </Button>
             <Button
               size="sm" variant="outline"
-              className="flex-1 text-xs sm:text-sm h-8 sm:h-9"
+              className="w-full text-xs h-8"
               onClick={() => navigate(profilePath)}
             >
               View
@@ -132,9 +132,8 @@ export function CreatorCard({ creator, variant = "public" }: CreatorCardProps) {
         ) : (
           <Button
             asChild size="sm"
-            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-xs sm:text-sm h-8 sm:h-9"
+            className="w-full bg-accent hover:bg-accent/90 text-accent-foreground text-xs h-8"
           >
-            {/* View Profile is always accessible — auth guard is on the booking action inside the profile */}
             <Link to={profilePath}>View Profile</Link>
           </Button>
         )}

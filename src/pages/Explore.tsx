@@ -15,7 +15,6 @@ const STATIC_CATEGORIES = ["All", "Fat Loss", "Muscle Gain", "Yoga", "Cardio", "
 const MAX_RETRIES = 3;
 const RETRY_DELAYS = [4000, 8000, 12000];
 
-// ── Filters panel ─────────────────────────────────────────────────────────────
 function Filters({
   categories,
   category, setCategory,
@@ -43,7 +42,6 @@ function Filters({
         </Select>
       </div>
 
-      {/* Price Type Toggle */}
       <div>
         <Label className="font-display font-semibold mb-3 block">Price Type</Label>
         <div className="flex rounded-md border border-border overflow-hidden text-xs font-medium">
@@ -101,7 +99,6 @@ function Filters({
   );
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
 const Explore = () => {
   const [creators,    setCreators]    = useState<PublicCreator[]>([]);
   const [loading,     setLoading]     = useState(true);
@@ -197,7 +194,6 @@ const Explore = () => {
     return list;
   }, [creators, category, price, minRating, sort, priceType]);
 
-  // ── Loading state ─────────────────────────────────────────────────────────
   if (loading) {
     const isColdStart = retryCount > 0;
     return (
@@ -224,7 +220,6 @@ const Explore = () => {
     );
   }
 
-  // ── Error state ───────────────────────────────────────────────────────────
   if (error) {
     return (
       <div className="container-app py-10">
@@ -249,7 +244,6 @@ const Explore = () => {
     );
   }
 
-  // ── Main render ───────────────────────────────────────────────────────────
   return (
     <div className="container-app py-10">
       <div className="mb-8">
@@ -326,55 +320,70 @@ const Explore = () => {
                 return (
                   <Card
                     key={c._id}
-                    className="flex items-center gap-5 p-4 border-border/60 shadow-card hover:shadow-soft transition-shadow"
+                    className="p-4 border-border/60 shadow-card hover:shadow-soft transition-shadow"
                   >
-                    {/* Avatar */}
-                    <div className="h-16 w-16 rounded-xl overflow-hidden shrink-0 bg-accent/10 flex items-center justify-center border border-border">
-                      {c.profileImage?.url ? (
-                        <img src={c.profileImage.url} alt={c.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="font-display font-bold text-xl text-accent">{initials}</span>
-                      )}
-                    </div>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-display font-semibold text-base">{c.name}</span>
-                        <BadgeCheck size={15} className="text-accent" />
-                        {specialty && (
-                          <Badge variant="secondary" className="text-xs">{specialty}</Badge>
+                    {/* Top row: avatar + name/badge + price */}
+                    <div className="flex items-start gap-3">
+                      {/* Avatar */}
+                      <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 bg-accent/10 flex items-center justify-center border border-border">
+                        {c.profileImage?.url ? (
+                          <img src={c.profileImage.url} alt={c.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="font-display font-bold text-lg text-accent">{initials}</span>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground truncate mt-0.5">
-                        {c.creatorProfile?.bio || "—"}
+
+                      {/* Name + verify + price on right */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          {/* Name + verified */}
+                          <div className="flex items-center gap-1 min-w-0">
+                            <span className="font-display font-semibold text-base truncate">{c.name}</span>
+                            <BadgeCheck size={15} className="text-accent shrink-0" />
+                          </div>
+                          {/* Price */}
+                          <div className="text-right shrink-0">
+                            {displayPrice > 0 ? (
+                              <>
+                                <span className="font-display font-bold text-base text-primary">
+                                  ₹{displayPrice.toLocaleString()}
+                                </span>
+                                <span className="text-xs text-muted-foreground block">
+                                  /{priceType === "monthly" ? "mo" : "session"}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">TBD</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Specialty badge — on its own line so it never overflows */}
+                        {specialty && (
+                          <Badge variant="secondary" className="text-xs mt-1 max-w-full truncate">
+                            {specialty}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Bio */}
+                    {c.creatorProfile?.bio && (
+                      <p className="text-sm text-muted-foreground mt-2 line-clamp-2">
+                        {c.creatorProfile.bio}
                       </p>
-                      <div className="flex items-center gap-1.5 mt-1">
+                    )}
+
+                    {/* Bottom row: rating + CTA */}
+                    <div className="flex items-center justify-between mt-3 gap-2">
+                      <div className="flex items-center gap-1.5">
                         <RatingStars rating={rating} />
                         <span className="text-sm font-medium">{rating > 0 ? rating : "New"}</span>
                         {reviews > 0 && (
                           <span className="text-xs text-muted-foreground">({reviews})</span>
                         )}
                       </div>
-                    </div>
-
-                    {/* Price + CTA */}
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <div className="text-right">
-                        {displayPrice > 0 ? (
-                          <>
-                            <span className="font-display font-bold text-lg text-primary">
-                              ₹{displayPrice.toLocaleString()}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              /{priceType === "monthly" ? "month" : "session"}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-sm text-muted-foreground italic">Pricing TBD</span>
-                        )}
-                      </div>
-                      <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+                      <Button asChild size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground shrink-0">
                         <Link to={`/creator/${c._id}`}>View Profile</Link>
                       </Button>
                     </div>

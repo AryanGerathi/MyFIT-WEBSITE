@@ -168,7 +168,7 @@ export interface ResendOTPPayload {
   purpose: "signup" | "login" | "forgot-password";
 }
 
-// ─── NEW: Forgot Password payloads ───────────────────────────────────────────
+// ─── Forgot Password payloads ─────────────────────────────────────────────────
 
 export interface ForgotPasswordPayload {
   email: string;
@@ -295,6 +295,10 @@ async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise
 
   const data = await res.json();
   if (!res.ok) {
+    if (res.status === 401) {
+      authService.clearSession();
+      window.location.href = "/login";
+    }
     throw new APIError(data.message || "Something went wrong.", res.status, data.errors || []);
   }
 
@@ -316,7 +320,6 @@ export const authService = {
   resendOTP: (payload: ResendOTPPayload) =>
     apiFetch<SuccessResponse>("/api/auth/resend-otp", { method: "POST", body: JSON.stringify(payload) }),
 
-  // ─── NEW: Forgot Password ──────────────────────────────────────────────────
   /**
    * Step 1 — Send a password-reset OTP to the given email.
    * Backend route: POST /api/auth/forgot-password
@@ -340,7 +343,6 @@ export const authService = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  // ──────────────────────────────────────────────────────────────────────────
 
   getMe: () =>
     apiFetch<{ success: true; user: AuthUser }>("/api/auth/me"),

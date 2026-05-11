@@ -254,10 +254,27 @@ export class APIError extends Error {
   }
 }
 
+// ─── Internal helper: get stored role safely ──────────────────────────────────
+
+function getStoredRole(): string | null {
+  try {
+    const raw = localStorage.getItem("myfit_user");
+    return raw ? JSON.parse(raw)?.role ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Base fetch helper ────────────────────────────────────────────────────────
 
 async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("myfit_token");
+  // ✅ FIX: Never send an admin token on non-admin requests.
+  // AdminPasswordGate stores a synthetic admin user in myfit_user with role="admin".
+  // That token is not valid for user/creator routes and causes "Admins cannot create orders."
+  // Guard: skip the token entirely when the stored role is admin.
+  const storedRole = getStoredRole();
+  const token = storedRole === "admin" ? null : localStorage.getItem("myfit_token");
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
 
@@ -323,8 +340,6 @@ export const authService = {
   /**
    * Step 1 — Send a password-reset OTP to the given email.
    * Backend route: POST /api/auth/forgot-password
-   * Body: { email }
-   * Response: { success: true, message: string, userId: string }
    */
   forgotPassword: (payload: ForgotPasswordPayload) =>
     apiFetch<OTPStepResponse>("/api/auth/forgot-password", {
@@ -335,8 +350,6 @@ export const authService = {
   /**
    * Step 2 — Verify the OTP + set a new password atomically.
    * Backend route: POST /api/auth/reset-password
-   * Body: { userId, otp, newPassword }
-   * Response: { success: true, message: string }
    */
   resetPassword: (payload: ResetPasswordPayload) =>
     apiFetch<SuccessResponse>("/api/auth/reset-password", {
@@ -351,7 +364,10 @@ export const authService = {
     apiFetch<UpdateProfileResponse>("/api/auth/update-profile", { method: "PUT", body: JSON.stringify(payload) }),
 
   uploadProfileImage: async (file: File): Promise<ImageUploadResponse> => {
-    const token = localStorage.getItem("myfit_token");
+    // ✅ Same admin-role guard for the raw fetch upload path
+    const storedRole = getStoredRole();
+    const token      = storedRole === "admin" ? null : localStorage.getItem("myfit_token");
+
     const formData = new FormData();
     formData.append("image", file);
     const controller = new AbortController();
@@ -422,7 +438,14 @@ export const authService = {
     localStorage.setItem("myfit_user", JSON.stringify(user));
   },
 
-  isLoggedIn: (): boolean => !!localStorage.getItem("myfit_token"),
+  isLoggedIn: (): boolean => {
+    // ✅ FIX: Admin sessions must NOT be treated as a valid user/creator login.
+    // Without this, ProtectedRoute would redirect an admin to /dashboard,
+    // and users on the same device with a stale admin session couldn't access their dashboard.
+    const role = getStoredRole();
+    if (role === "admin") return false;
+    return !!localStorage.getItem("myfit_token");
+  },
 };
 
 // ─── Help Request Types ───────────────────────────────────────────────────────
@@ -446,22 +469,18 @@ interface HelpStatusUpdateResponse { success: true; request:  HelpRequest; }
 // ─── Help Service ─────────────────────────────────────────────────────────────
 
 export const helpService = {
-  // User: submit a new request
   submit: (payload: { category: string; subject: string; message: string }) =>
     apiFetch<HelpRequestResponse>("/api/help", {
       method: "POST",
       body:   JSON.stringify(payload),
     }),
 
-  // User: get only their own requests
   getMine: () =>
     apiFetch<HelpRequestsResponse>("/api/help/mine"),
 
-  // Admin: get all requests
   getAll: () =>
     apiFetch<HelpRequestsResponse>("/api/help"),
 
-  // Admin: update status
   updateStatus: (id: string, status: HelpRequest["status"]) =>
     apiFetch<HelpStatusUpdateResponse>(`/api/help/${id}/status`, {
       method: "PATCH",

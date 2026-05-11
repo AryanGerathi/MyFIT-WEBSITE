@@ -644,6 +644,35 @@ function Profile() {
 
   const [profileImageUrl, setProfileImageUrl] = useState(user?.profileImage?.url || "");
 
+  // ── Controlled state ────────────────────────────────────────────────────
+  const [name,    setName]    = useState(user?.name  || "");
+  const [phone,   setPhone]   = useState(user?.phone?.number || "");
+  const [goal,    setGoal]    = useState("Lose 5kg & build core strength");
+  const [saving,  setSaving]  = useState(false);
+
+  // ── Save handler ────────────────────────────────────────────────────────
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) { toast.error("Name is required"); return; }
+
+    setSaving(true);
+    try {
+      const { user: updatedUser } = await authService.updateProfile({
+        name:           name.trim(),
+        phone:          phone.trim(),
+        countryCode:    user?.phone?.countryCode || "+91",
+        specialization: "",   // not used for regular users
+        bio:            "",   // not used for regular users
+      });
+      authService.updateStoredUser(updatedUser);
+      toast.success("Profile updated!");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update profile");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl space-y-6">
       <Card className="p-6 border-border/60 shadow-card">
@@ -653,7 +682,7 @@ function Profile() {
           onUploaded={(url) => setProfileImageUrl(url)}
         />
         <div className="mt-4 pt-4 border-t border-border/60">
-          <p className="font-display font-bold text-lg">{user?.name || "—"}</p>
+          <p className="font-display font-bold text-lg">{name || "—"}</p>
           <p className="text-sm text-muted-foreground">{user?.email || "—"}</p>
           <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-accent/10 text-accent font-medium capitalize">
             {user?.role || "user"}
@@ -663,17 +692,28 @@ function Profile() {
 
       <Card className="p-6 border-border/60 shadow-card">
         <h2 className="font-display font-semibold text-lg mb-5">Your profile</h2>
-        <form onSubmit={(e) => { e.preventDefault(); toast.success("Profile updated"); }} className="space-y-4">
+        <form onSubmit={handleSave} className="space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label>Full name</Label>
-              <Input defaultValue={user?.name || ""} className="mt-1.5" placeholder="Your name" />
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1.5"
+                placeholder="Your name"
+              />
             </div>
             <div>
               <Label>Email</Label>
-              <Input type="email" defaultValue={user?.email || ""} className="mt-1.5 bg-muted/40 cursor-not-allowed" readOnly />
+              <Input
+                type="email"
+                value={user?.email || ""}
+                className="mt-1.5 bg-muted/40 cursor-not-allowed"
+                readOnly
+              />
             </div>
           </div>
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
               <Label>Mobile number</Label>
@@ -681,8 +721,17 @@ function Profile() {
                 <span className="inline-flex items-center px-3 rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
                   {user?.phone?.countryCode || "+91"}
                 </span>
-                <Input defaultValue={user?.phone?.number || ""} placeholder="Phone number" className="flex-1" />
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                  placeholder="Phone number"
+                  maxLength={10}
+                  className="flex-1"
+                />
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Used for WhatsApp booking confirmations
+              </p>
             </div>
             <div>
               <Label>Account type</Label>
@@ -693,20 +742,39 @@ function Profile() {
               />
             </div>
           </div>
+
           <div>
             <Label>Fitness goal</Label>
-            <Input defaultValue="Lose 5kg & build core strength" className="mt-1.5" />
+            <Input
+              value={goal}
+              onChange={(e) => setGoal(e.target.value)}
+              className="mt-1.5"
+              placeholder="e.g. Lose 5kg & build core strength"
+            />
           </div>
+
           <div className="pt-1">
             <Label className="text-xs text-muted-foreground">Member since</Label>
             <p className="text-sm mt-0.5">
               {user?.createdAt ? format(new Date(user.createdAt), "PPP") : "—"}
             </p>
           </div>
+
           <div className="flex items-center gap-3 pt-2">
-            <Button type="submit" className="bg-accent text-accent-foreground">Save changes</Button>
-            <Button type="button" variant="outline"
-              onClick={() => { authService.clearSession(); navigate("/login"); }}>
+            <Button
+              type="submit"
+              disabled={saving}
+              className="bg-accent text-accent-foreground"
+            >
+              {saving
+                ? <><Loader2 size={14} className="animate-spin mr-1.5" />Saving…</>
+                : "Save changes"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { authService.clearSession(); navigate("/login"); }}
+            >
               Logout
             </Button>
           </div>
